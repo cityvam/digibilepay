@@ -324,9 +324,9 @@ function otpStep(body){modal(`<button class="close" aria-label="بستن" onclic
  let s=60;const iv=setInterval(()=>{s--;const r=$('#rs');if(!r){clearInterval(iv);return}r.textContent=s>0?`ارسال دوباره بعد از ${fa(s)} ثانیه`:'ارسال دوباره‌ی کد';if(s<=0)clearInterval(iv)},1000);
  $('#ov2').onclick=async()=>{const code=ins.map(i=>i.value).join('');if(code.length<5){$('#oh').textContent='کد را کامل وارد کنید';return}
   if(CFG.mock){done(body.fullName||'مشتری');return}
-  try{const r=await fetch(CFG.endpoints.verifyOtp,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumbeasync function done(name){closeM();try{await detectRole()}catch(e){}if(role==='guest')role='customer';if(name)user=name;renderAuth();toast(name?'خوش آمدید '+name:'وارد شدید')}||'کد نادرست است';return}
+  try{const r=await fetch(CFG.endpoints.verifyOtp,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:body.phoneNumber,code})});const j=await r.json().catch(()=>({}));if(!r.ok){$('#oh').textContent=(j&&j.message)||'کد نادرست است';return}
    const tok=(j.data&&(j.data.accessToken||j.data.token))||j.accessToken||j.token;if(tok)try{localStorage.setItem('token',tok)}catch(_){}done(body.fullName)}catch(e){$('#oh').textContent='اتصال برقرار نشد'}}}
-function done(name){closeM();role='customer';user=name;renderAuth();toast(name?`خوش آمدید ${name}`:'وارد شدید')}
+async function done(name){closeM();try{await detectRole()}catch(e){}if(role==='guest')role='customer';if(name)user=name;renderAuth();toast(name?'خوش آمدید '+name:'وارد شدید')}
 function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button class="close" aria-label="بستن" onclick="closeM()">×</button><h2>تأیید درخواست</h2><p class="sub" style="margin:0">${p.name} · ${fa(t.m)} قسط</p>
  <div class="rows" style="margin:14px 0"><div><span>مبلغ خرید</span><b class="num">${fa(S.amt)}</b></div><div><span>پیش‌پرداخت</span><b class="num">${fa(c.down)}</b></div><div><span>قسط ماهانه</span><b class="num">${fa(Math.round(c.monthly))}</b></div></div>
  <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
