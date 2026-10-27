@@ -440,7 +440,7 @@ def preview_admin_get(handler, path, query):
         item=record_get("backups",match.group(1))
         if not item: raise ApiError(404,"نسخه پشتیبان پیدا نشد.")
         return (json.dumps(item.get("snapshot",{}),ensure_ascii=False,indent=2).encode("utf-8"),"application/json; charset=utf-8")
-    match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)(?:/([^/]+))?",path,re.I)
+    match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|partnership-applications|support-tickets|tenants|virtual-cards)(?:/([^/]+))?",path,re.I)
     if match:
         resource=match.group(1).lower()
         ident=match.group(2)
@@ -579,11 +579,11 @@ def preview_admin_post(handler, path, body):
             users=int(c.execute("SELECT COUNT(*) FROM app_users").fetchone()[0])
             products=[product_json(x) for x in c.execute("SELECT * FROM loan_products ORDER BY sort_order,name").fetchall()]
         snapshot={"createdAt":iso_now(),"previewOnly":True,"userCount":users,"loanProducts":products,
-                  "resources":{name:record_list(name) for name in ("contract-templates","contract-variables","contracts","counterparties","documents","inquiries","ledger/accounts","ledger/entries","marketers","orders","payment-declarations","tenants","virtual-cards")}}
+                  "resources":{name:record_list(name) for name in ("contract-templates","contract-variables","contracts","counterparties","documents","inquiries","ledger/accounts","ledger/entries","marketers","orders","payment-declarations","partnership-applications","support-tickets","tenants","virtual-cards")}}
         name="preview-backup-"+datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")+"-"+secrets.token_hex(3)+".json"
         backup=save_record("backups",{"name":name,"createdAt":iso_now(),"size":len(json.dumps(snapshot,ensure_ascii=False)),"snapshot":snapshot},name,user["id"],"backup")
         return {"name":name,"createdAt":backup["createdAt"]}
-    collection=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)",path,re.I)
+    collection=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|partnership-applications|support-tickets|tenants|virtual-cards)",path,re.I)
     if collection:
         resource=collection.group(1).lower()
         item=dict(body)
