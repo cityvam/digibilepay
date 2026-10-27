@@ -410,6 +410,16 @@ def preview_admin_get(handler, path, query):
         return {"data":(item or {}).get("rows",[])}
     match=re.fullmatch(r"/api/v1/admin/virtual-cards/([^/]+)/transactions",path,re.I)
     if match: return {"data":record_list("card-transactions:"+match.group(1))}
+    match=re.fullmatch(r"/api/v1/admin/documents/([^/]+)/file",path,re.I)
+    if match:
+        item=record_get("documents",match.group(1))
+        if not item or not item.get("fileData"): raise ApiError(404,"فایلی برای این مدرک موجود نیست.")
+        return (base64.b64decode(item["fileData"]),str(item.get("contentType") or "application/octet-stream"))
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/image",path,re.I)
+    if match:
+        item=record_get("product-images",match.group(1))
+        if not item or not item.get("fileData"): raise ApiError(404,"تصویر طرح موجود نیست.")
+        return (base64.b64decode(item["fileData"]),str(item.get("contentType") or "application/octet-stream"))
     match=re.fullmatch(r"/api/v1/admin/contracts/([^/]+)/html",path,re.I)
     if match:
         item=record_get("contracts",match.group(1))
