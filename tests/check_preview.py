@@ -198,7 +198,7 @@ def check_admin_module_mutations(token):
     assert status==201, contract
     contract_obj=json_data(contract); cid=contract_obj["id"]
     status, _, html, ctype=request(f"/api/v1/admin/contracts/{cid}/html",token=token)
-    assert status==200 and b"قرارداد نمونه پیش‌نمایش" in html and "text/html" in ctype, (status,ctype,html)
+    assert status==200 and "قرارداد نمونه پیش‌نمایش" in html.decode("utf-8") and "text/html" in ctype, (status,ctype,html)
     status, signed, _, _=request(f"/api/v1/admin/contracts/{cid}/sign","POST",{},token)
     assert status==201 and json_data(signed).get("status")=="Signed", signed
 
