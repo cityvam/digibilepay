@@ -657,18 +657,19 @@ def api_post(handler,path,body):
     if p=="/api/v1/security/otp/request":
         phone=normalize_phone(body.get("phone")); purpose=str(body.get("purpose") or "login").lower()
         if not phone: raise ApiError(400,"شماره موبایل معتبر نیست.")
-        if purpose not in ("login","register"): purpose="login"
+        if purpose not in ("login","register","reset"): purpose="login"
         if not validate_captcha(str(body.get("captchaId") or ""),str(body.get("captchaAnswer") or "")): raise ApiError(400,"کد امنیتی نادرست یا منقضی شده است.")
         with connect_db() as c: exists=c.execute("SELECT 1 FROM app_users WHERE phone=?",(phone,)).fetchone() is not None
-        if purpose=="login" and not exists: raise ApiError(404,"حسابی با این شماره پیدا نشد. ثبت‌نام کنید.")
+        if purpose in ("login","reset") and not exists: raise ApiError(404,"حسابی با این شماره پیدا نشد.")
         if purpose=="register" and exists: raise ApiError(409,"این شماره قبلاً ثبت شده است؛ وارد شوید.")
         return 200,create_otp(phone,purpose)
     if p=="/api/v1/security/otp/verify":
         phone=normalize_phone(body.get("phone"))
-        purpose="register" if str(body.get("purpose") or "").lower()=="register" else "login"
+        purpose=str(body.get("purpose") or "").lower()
+        if purpose not in ("register","reset"): purpose="login"
         if not phone: raise ApiError(400,"شماره موبایل معتبر نیست.")
         challenge=verify_otp(phone,purpose,str(body.get("code") or ""))
-        if purpose=="register":
+        if purpose in ("register","reset"):
             ticket=create_ticket(phone)
             with connect_db() as c: c.execute("DELETE FROM otp_challenges WHERE phone=? AND purpose=?",(phone,purpose))
             return 200,{"ticket":ticket}
@@ -700,6 +701,18 @@ def api_post(handler,path,body):
             user=add_user(c,full_name,phone,password_hash(password),"Customer",email,nid)
             c.execute("DELETE FROM otp_tickets WHERE ticket=?",(ticket,))
         token=issue_token(user); return 200,{"data":{"accessToken":token,"token":token,"user":safe_user(user)}}
+    if p=="/api/v1/security/password/reset":
+        ticket=str(body.get("ticket") or "")
+        password=normalize_digits(body.get("password") or "")
+        if len(password)<8: raise ApiError(400,"رمز عبور باید حداقل ۸ نویسه باشد.")
+        with connect_db() as c:
+            tr=c.execute("SELECT * FROM otp_tickets WHERE ticket=?",(ticket,)).fetchone()
+            if not tr or tr["expires_at"]<now(): raise ApiError(400,"تأیید شماره منقضی شده است؛ فرایند را دوباره آغاز کنید.")
+            user=c.execute("SELECT id FROM app_users WHERE phone=?",(tr["phone"],)).fetchone()
+            if not user: raise ApiError(404,"حساب پیدا نشد.")
+            c.execute("UPDATE app_users SET password_hash=? WHERE id=?",(password_hash(password),user["id"]))
+            c.execute("DELETE FROM otp_tickets WHERE ticket=?",(ticket,))
+        return 200,{"ok":True,"message":"رمز عبور در دیتابیس توسعه‌ای تغییر کرد."}
     if p=="/api/v1/security/register/ocr": raise ApiError(501,"OCR در پیش‌نمایش توسعه‌ای فعال نیست.")
     if p=="/api/v1/auth/login":
         login=str(body.get("phoneNumber") or body.get("username") or body.get("phone") or "").strip()
@@ -779,6 +792,27 @@ def api_post(handler,path,body):
         require_admin(handler)
         with connect_db() as c: seed_products(c)
         return 200,{"ok":True,"message":"طرح‌های پیش‌فرض در دیتابیس توسعه‌ای ثبت شدند."}
+    if p=="/api/v1/public/support-tickets":
+        name=str(body.get("name") or "").strip()
+        phone=normalize_phone(body.get("phone") or "")
+        subject=str(body.get("subject") or "").strip()
+        message=str(body.get("message") or "").strip()
+        if len(name)<2 or not phone or len(subject)<2 or len(message)<5:
+            raise ApiError(400,"نام، شماره موبایل، موضوع و متن پیام الزامی است.")
+        item=save_record("support-tickets",{"name":name,"phone":phone,"subject":subject,
+          "message":message,"status":"Open","createdAt":iso_now()},actor_id="anonymous",action="support-ticket")
+        return 201,{"data":{"id":item["id"],"status":item["status"],"message":"درخواست در دیتابیس پیش‌نمایش ثبت شد؛ در این محیط به مرکز پشتیبانی واقعی ارسال نمی‌شود."}}
+    if p=="/api/v1/public/partnership-applications":
+        name=str(body.get("name") or "").strip()
+        phone=normalize_phone(body.get("phone") or "")
+        kind=str(body.get("kind") or "merchant").strip().lower()
+        if kind not in ("merchant","agent","organization"): kind="merchant"
+        if len(name)<2 or not phone:
+            raise ApiError(400,"نام و شماره موبایل معتبر وارد کنید.")
+        item=save_record("partnership-applications",{"name":name,"phone":phone,"kind":kind,
+          "company":str(body.get("company") or "").strip(),"message":str(body.get("message") or "").strip(),
+          "status":"New","createdAt":iso_now()},actor_id="anonymous",action="partnership-application")
+        return 201,{"data":{"id":item["id"],"status":item["status"],"message":"درخواست در دیتابیس پیش‌نمایش ثبت شد؛ در این محیط به سامانه عملیاتی ارسال نمی‌شود."}}
     return 201,preview_admin_post(handler,path,body)
 
 def api_put(handler,path,body):
