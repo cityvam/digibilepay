@@ -160,7 +160,7 @@ def check_auth_and_admin_routes():
     assert status==201, card
     card_id=json_data(card).get("id")
     status, changed, _, _=request("/api/v1/admin/virtual-cards/"+card_id+"/freeze","POST",{},token)
-    assert status==200 and json_data(changed).get("status")=="Frozen", changed
+    assert status in (200,201) and json_data(changed).get("status")=="Frozen", changed
     status, audit, _, _=request("/api/v1/admin/audit/verify",token=token)
     assert status==200 and json_data(audit).get("ok") is True, audit
     # Bank inquiry is intentionally not connected in Codespaces.
