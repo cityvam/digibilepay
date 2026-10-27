@@ -75,7 +75,18 @@ function mock(m,u,b){return new Promise(res=>setTimeout(()=>{
  if(u===API.otpVer)return res((b.code||'').length===6?{ok:true,status:200,j:{ticket:'t'}}:{ok:false,status:400,j:{message:'کد نادرست است'}});
  if(u===API.register)return res({ok:true,status:200,j:{token:'preview'}});
  if(u.startsWith(API.otpSt))return res({ok:true,status:200,j:{expiresIn:0,resendIn:0}});res({ok:false,status:404,j:{}})},350))}
-const capId={};async function loadCap(k){const r=await call('GET',API.captcha);if(r.ok){capId[k]=r.j.id;$('#ci'+k).src=r.j.image;$('#c'+k).value=''}else msg('دریافت کد امنیتی ممکن نشد.')}
+const capId={};async function loadCap(k){
+ const img=$('#ci'+k),input=$('#c'+k);
+ img.removeAttribute('src');img.alt='در حال دریافت کد امنیتی…';
+ try{
+  const r=await call('GET',API.captcha+'?v='+Date.now());
+  if(!r.ok||!r.j||!r.j.id||!r.j.image){img.alt='کد امنیتی بارگذاری نشد';msg((r.j&&r.j.message)||'دریافت کد امنیتی ممکن نشد. دکمهٔ ↻ را بزنید.');return}
+  capId[k]=r.j.id;input.value='';
+  img.onload=()=>{img.alt='تصویر کد امنیتی'};
+  img.onerror=()=>{img.removeAttribute('src');img.alt='تصویر کد امنیتی در دسترس نیست';msg('تصویر کد امنیتی نمایش داده نشد؛ دکمهٔ ↻ را بزنید.')}
+  img.src=r.j.image;
+ }catch(_){img.alt='کد امنیتی در دسترس نیست';msg('ارتباط با سرور برای دریافت کد امنیتی برقرار نشد. صفحه را تازه کنید.')}
+}
 document.querySelectorAll('[data-rf]').forEach(b=>b.onclick=()=>loadCap(b.dataset.rf));
 const EYE_ON='<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>',EYE_OFF='<path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/>';
 $('#eye').onclick=()=>{const i=$('#rp'),show=i.type==='password',s=i.selectionStart,e=i.selectionEnd;i.type=show?'text':'password';$('#eye').setAttribute('aria-pressed',show);$('#eyeI').innerHTML=show?EYE_OFF:EYE_ON;i.focus();try{i.setSelectionRange(s,e)}catch(_){}};
