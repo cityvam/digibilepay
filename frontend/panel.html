@@ -1147,6 +1147,34 @@ async function psave(id){let t,c,d;try{t=JSON.parse($('#f_t').value);c=JSON.pars
  const b={name:$('#f_name').value,slug:$('#f_slug').value.trim(),description:$('#f_desc').value,badge:$('#f_badge').value,minAmount:+toEn($('#f_min').value),maxAmount:+toEn($('#f_max').value),intervalDays:+toEn($('#f_iv').value),tiers:t,conditions:c,documents:d,isActive:$('#f_on').checked,sortOrder:+toEn($('#f_so').value)||0};
  await api(id?'PUT':'POST','/api/v1/admin/loan-products'+(id?'/'+id:''),b);toast('ذخیره شد');$('#ldr').hidden=true;reload()}
 
+V.loans=view('la',async()=>{
+ const apps=await api('GET','/api/v1/admin/loan-applications');
+ const statusLabel={Pending:'در انتظار بررسی',UnderReview:'در حال بررسی',Approved:'تأیید اولیه',Rejected:'رد شده'};
+ const statusClass={Pending:'p',UnderReview:'p',Approved:'a',Rejected:'r'};
+ const rows=apps.map(a=>{
+  const st=a.status||'Pending';
+  const statusButtons=[['UnderReview','شروع بررسی'],['Approved','تأیید اولیه'],['Rejected','رد درخواست']]
+    .filter(x=>x[0]!==st).map(x=>'<button class="btn" data-app-status="'+x[0]+'" data-app-id="'+esc(a.id)+'">'+x[1]+'</button>').join(' ');
+  return '<tr><td><b>'+esc(a.productName||a.productSlug||'طرح')+'</b><div class="sub">'+esc(a.id)+'</div></td>'+
+   '<td>'+esc(a.userName||'—')+'<div class="sub">'+esc(a.userPhone||'')+'</div></td>'+
+   '<td><span class="n">'+fm(a.amount||0)+'</span></td><td>'+fa(a.months||0)+' ماه</td>'+
+   '<td><span class="pill '+(statusClass[st]||'p')+'">'+(statusLabel[st]||esc(st))+'</span></td>'+
+   '<td>'+new Date(a.createdAt||Date.now()).toLocaleDateString('fa-IR')+'</td><td><div class="frow">'+statusButtons+'</div></td></tr>'
+ }).join('');
+ return head('درخواست‌های واقعی وام','فهرست درخواست‌هایی که مشتری از پروفایل ثبت کرده است. تأیید اولیه به معنای صدور یا پرداخت وجه نیست.')+
+  (rows?'<div class="panel" style="overflow:auto"><table><thead><tr><th>طرح</th><th>مشتری</th><th>مبلغ (تومان)</th><th>مدت</th><th>وضعیت</th><th>تاریخ</th><th>اقدام</th></tr></thead><tbody>'+rows+'</tbody></table></div>':
+   '<div class="panel"><p class="sub">هنوز درخواست وامی ثبت نشده است. وقتی مشتری از پروفایل درخواست ثبت کند، اینجا دیده می‌شود.</p><button class="btn" data-v="products">تعریف وام‌ها</button></div>')+
+  '<div class="panel"><p class="sub">در پیش‌نمایش امکان تصمیم‌گیری اولیه و رد درخواست وجود دارد؛ صدور وام و ایجاد پرداخت واقعی فعال نیست.</p></div>'
+});
+document.addEventListener('click',ok(async e=>{
+ const b=e.target.closest('[data-app-status]');if(!b)return;
+ const id=b.dataset.appId,status=b.dataset.appStatus;
+ if(status==='Rejected'&&!confirm('این درخواست رد شود؟'))return;
+ const note=status==='Rejected'?(prompt('دلیل رد درخواست (اختیاری):')||''):'';
+ b.disabled=true;
+ try{await api('POST','/api/v1/admin/loan-applications/'+encodeURIComponent(id)+'/status',{status,note});toast('وضعیت درخواست به‌روزرسانی شد');reload()}
+ catch(err){b.disabled=false;toast(err.message||'ذخیره وضعیت ناموفق بود')}
+}));
 V.cards=view('c',async()=>{S.cd=await api('GET','/api/v1/admin/virtual-cards');
  return head('کارت‌های مجازی','کارت هر وام در درگاه داخلی','<button class="btn solid" data-l="cissue">صدور کارت</button>')+`<div class="panel">`+
  tbl([['دارنده',c=>esc(c.holderName)],['کارت',c=>`<span class="n" style="direction:ltr;display:inline-block">${esc(c.number)}</span>`],['سقف',c=>`<span class="n">${fa(c.limit)}</span>`],['مصرف',c=>`<span class="n">${fa(c.spent)}</span>`],['وضعیت',c=>pill(CS,c.status)],['',c=>`<button class="btn" data-l="cview" data-i="${c.id}">مدیریت</button>`]],S.cd)+`</div>`});
