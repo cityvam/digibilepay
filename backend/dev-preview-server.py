@@ -453,6 +453,40 @@ def preview_admin_get(handler, path, query):
 def preview_admin_post(handler, path, body):
     user=require_admin(handler)
     p=path.lower()
+    match=re.fullmatch(r"/api/v1/admin/contract-templates/([^/]+)/sample",path,re.I)
+    if match:
+        upload=body.get("file") if isinstance(body.get("file"),dict) else {}
+        if not upload.get("filename"): raise ApiError(400,"فایل نمونه انتخاب نشده است.")
+        return {"data":public_record(save_record("contract-templates",{"sampleFileName":upload["filename"],
+          "sampleFileSize":int(upload.get("size") or 0)},match.group(1),user["id"],"upload-sample"))}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/image",path,re.I)
+    if match:
+        upload=body.get("file") if isinstance(body.get("file"),dict) else {}
+        if not upload.get("contentBase64"): raise ApiError(400,"فایل تصویر انتخاب نشده است.")
+        ident=match.group(1)
+        saved=save_record("product-images",{"fileData":upload["contentBase64"],
+          "fileName":upload.get("filename","image"),"contentType":upload.get("contentType","application/octet-stream"),
+          "size":int(upload.get("size") or 0)},ident,user["id"],"upload-image")
+        return {"url":"/api/v1/admin/loan-products/"+ident+"/image","fileName":saved["fileName"]}
+    match=re.fullmatch(r"/api/v1/admin/contracts/([^/]+)/(approve|sign|reject|cancel|issue|void|present)",path,re.I)
+    if match:
+        ident,action=match.group(1),match.group(2).lower()
+        item=record_get("contracts",ident)
+        if not item: raise ApiError(404,"قرارداد پیدا نشد.")
+        status={"approve":"Approved","sign":"Signed","reject":"Rejected","cancel":"Cancelled","issue":"Issued","void":"Void","present":"Presented"}[action]
+        events=list(item.get("events",[])); events.append({"at":iso_now(),"action":action,"note":str(body.get("note") or "")})
+        return {"data":public_record(save_record("contracts",{"status":status,"events":events,"note":str(body.get("note") or "")},ident,user["id"],action))}
+    match=re.fullmatch(r"/api/v1/admin/ledger/entries/([^/]+)/reverse",path,re.I)
+    if match:
+        original=record_get("ledger/entries",match.group(1))
+        if not original: raise ApiError(404,"سند حسابداری پیدا نشد.")
+        if original.get("reversedBy"): raise ApiError(409,"این سند قبلاً معکوس شده است.")
+        lines=[{"accountId":x.get("accountId"),"debit":int(x.get("credit") or 0),"credit":int(x.get("debit") or 0)} for x in original.get("lines",[])]
+        reverse=save_record("ledger/entries",{"number":"REV-"+str(original.get("number") or match.group(1)),
+          "memo":"سند معکوس: "+str(original.get("memo") or ""),"lines":lines,"reverses":original["id"],
+          "status":"Posted","createdAt":iso_now()},actor_id=user["id"],action="reverse")
+        save_record("ledger/entries",{"reversedBy":reverse["id"]},original["id"],user["id"],"mark-reversed")
+        return {"data":public_record(reverse)}
     if p=="/api/v1/admin/contract-variables/sync-defaults":
         defaults=[
           {"key":"user.fullName","label":"نام و نام خانوادگی","dataType":"String","source":"User","path":"fullName","required":True,"format":"","sensitivity":"Normal","defaultValue":"","validation":""},
