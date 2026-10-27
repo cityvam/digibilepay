@@ -347,9 +347,11 @@ def api_post(handler,path,body):
             if not tr or tr["expires_at"]<now(): raise ApiError(400,"تأیید موبایل منقضی شده است؛ دوباره کد بگیرید.")
             full_name=str(body.get("fullName") or "").strip(); phone=tr["phone"]
             password=normalize_digits(body.get("password") or ""); nid=normalize_digits(body.get("nationalCode") or "").strip() or None
-            if not re.fullmatch(r"[0-9]{8,}",password): raise ApiError(400,"رمز ثابت باید حداقل ۸ رقم عددی باشد.")
-            if nid and not re.fullmatch(r"\d{10}",nid): raise ApiError(400,"کد ملی باید ۱۰ رقم باشد.")
-            user=add_user(c,full_name,phone,password_hash(password),"Customer",str(body.get("email") or "").strip() or None,nid)
+            email=str(body.get("email") or "").strip()
+            if len(password)<8: raise ApiError(400,"رمز ثابت باید حداقل ۸ نویسه باشد.")
+            if not re.fullmatch(r"\d{10}",nid or ""): raise ApiError(400,"کد ملی باید ۱۰ رقم باشد.")
+            if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): raise ApiError(400,"ایمیل معتبر و الزامی است.")
+            user=add_user(c,full_name,phone,password_hash(password),"Customer",email,nid)
             c.execute("DELETE FROM otp_tickets WHERE ticket=?",(ticket,))
         token=issue_token(user); return 200,{"data":{"accessToken":token,"token":token,"user":safe_user(user)}}
     if p=="/api/v1/security/register/ocr": raise ApiError(501,"OCR در پیش‌نمایش توسعه‌ای فعال نیست.")
@@ -361,11 +363,18 @@ def api_post(handler,path,body):
         token=issue_token(user); return 200,{"data":{"accessToken":token,"token":token,"user":safe_user(user)}}
     if p=="/api/v1/auth/register":
         phone=normalize_phone(body.get("phoneNumber") or body.get("phone")); password=normalize_digits(body.get("password") or "")
+        full_name=str(body.get("fullName") or "").strip()
+        national_code=normalize_digits(body.get("nationalCode") or "").strip()
+        email=str(body.get("email") or "").strip()
         if not phone: raise ApiError(400,"شماره موبایل معتبر نیست.")
-        if not re.fullmatch(r"[0-9]{8,}",password): raise ApiError(400,"رمز ثابت باید حداقل ۸ رقم عددی باشد.")
+        if len(password)<8: raise ApiError(400,"رمز ثابت باید حداقل ۸ نویسه باشد.")
+        if len(full_name.split())<2: raise ApiError(400,"نام و نام خانوادگی الزامی است.")
+        if not re.fullmatch(r"\d{10}",national_code): raise ApiError(400,"کد ملی باید ۱۰ رقم باشد.")
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email): raise ApiError(400,"ایمیل معتبر و الزامی است.")
         with connect_db() as c:
             if c.execute("SELECT 1 FROM app_users WHERE phone=?",(phone,)).fetchone(): raise ApiError(409,"این شماره قبلاً ثبت شده است.")
-        pending=dict(body); pending["password_hash"]=password_hash(password); pending.pop("password",None)
+        pending=dict(body); pending["fullName"]=full_name; pending["nationalCode"]=national_code; pending["email"]=email
+        pending["password_hash"]=password_hash(password); pending.pop("password",None)
         return 200,create_otp(phone,"home-register",pending)
     if p=="/api/v1/auth/verify-otp":
         phone=normalize_phone(body.get("phoneNumber") or body.get("phone"))
@@ -446,12 +455,15 @@ def create_user_cli():
     role=next((r for r in ROLES if r.lower()==role.lower()),"")
     if not role: print("نقش نامعتبر است."); return 2
     name=input("نام و نام خانوادگی: ").strip(); phone=normalize_phone(input("شماره موبایل (09...): "))
-    email=input("ایمیل (اختیاری): ").strip() or None
-    password=normalize_digits(getpass("رمز اولیه (حداقل ۸ رقم عددی): ")); confirm=normalize_digits(getpass("تکرار رمز: "))
-    if not name or not phone or not re.fullmatch(r"[0-9]{8,}",password) or password!=confirm:
-        print("نام/شماره/رمز معتبر نیست؛ رمز باید حداقل ۸ رقم عددی و دو رمز یکسان باشند. حساب ساخته نشد."); return 2
+    national_code=normalize_digits(input("کد ملی (۱۰ رقم): ")).strip()
+    email=input("ایمیل: ").strip()
+    password=getpass("رمز اولیه (حداقل ۸ نویسه): "); confirm=getpass("تکرار رمز: ")
+    if (len(name.split())<2 or not phone or not re.fullmatch(r"\d{10}",national_code)
+        or not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+",email)
+        or len(password)<8 or password!=confirm):
+        print("نام، شماره، کد ملی یا ایمیل معتبر نیست؛ رمز باید حداقل ۸ نویسه باشد و دو رمز یکسان باشند. حساب ساخته نشد."); return 2
     try:
-        with connect_db() as c: add_user(c,name,phone,password_hash(password),role,email)
+        with connect_db() as c: add_user(c,name,phone,password_hash(password),role,email,national_code)
         print("حساب توسعه‌ای با نقش {} ساخته شد (شماره با ••{} تمام می‌شود).".format(role,phone[-4:]))
         print("این حساب فقط در SQLite همین Codespace وجود دارد."); return 0
     except ApiError as e: print("ساخته نشد: "+e.message); return 2
