@@ -405,6 +405,13 @@ def api_post(handler,path,body):
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs): super().__init__(*args,directory=str(FRONTEND),**kwargs)
+    def end_headers(self):
+        # The preview HTML must not be cached across Codespaces/git updates.
+        # API JSON responses set their own Cache-Control header in send_json().
+        if not urlsplit(self.path).path.startswith("/api/"):
+            self.send_header("Cache-Control","no-store, no-cache, must-revalidate, max-age=0")
+            self.send_header("Pragma","no-cache")
+        super().end_headers()
     def log_message(self,fmt,*args): print("[preview] "+(fmt%args),flush=True)
     def send_json(self,status,payload):
         raw=json.dumps(payload,ensure_ascii=False).encode("utf-8")
@@ -468,10 +475,26 @@ def create_user_cli():
         print("این حساب فقط در SQLite همین Codespace وجود دارد."); return 0
     except ApiError as e: print("ساخته نشد: "+e.message); return 2
 
+def set_role_cli():
+    print("تغییر نقش فقط برای حساب دیتابیس توسعه‌ای Codespaces")
+    phone=normalize_phone(input("شماره موبایل حساب ثبت‌نام‌شده (09...): "))
+    requested=input("نقش جدید (SuperAdmin/Admin/Customer/Merchant/Agent): ").strip()
+    role=next((r for r in ROLES if r.lower()==requested.lower()),"")
+    if not phone or not role:
+        print("شماره موبایل یا نقش معتبر نیست؛ تغییری انجام نشد."); return 2
+    with connect_db() as c:
+        user=c.execute("SELECT id FROM app_users WHERE phone=?",(phone,)).fetchone()
+        if not user:
+            print("حسابی با این شماره در دیتابیس همین Codespace پیدا نشد."); return 2
+        c.execute("UPDATE app_users SET role=? WHERE id=?",(role,user["id"]))
+    print("نقش حساب به {} تغییر کرد (شماره با ••{} تمام می‌شود).".format(role,phone[-4:]))
+    print("این تغییر فقط در SQLite همین Codespace اعمال شده است."); return 0
+
 def main():
     parser=argparse.ArgumentParser(description="Development-only DigitalPay preview with SQLite")
     parser.add_argument("--host",default="0.0.0.0"); parser.add_argument("--port",type=int,default=8080)
     parser.add_argument("--check-db",action="store_true"); parser.add_argument("--create-user",action="store_true")
+    parser.add_argument("--set-role",action="store_true",help="Change a registered user's role in the development SQLite database")
     args=parser.parse_args()
     if not FRONTEND.is_dir(): print("پوشه frontend پیدا نشد: "+str(FRONTEND),file=sys.stderr); return 2
     init_db()
@@ -481,6 +504,7 @@ def main():
             products=c.execute("SELECT COUNT(*) n FROM loan_products").fetchone()["n"]
         print("SQLite OK | Database: {} | Users: {} | Loan products: {}".format(DB_PATH,users,products)); return 0
     if args.create_user: return create_user_cli()
+    if args.set_role: return set_role_cli()
     print("============================================================")
     print("DigitalPay Codespaces DEVELOPMENT PREVIEW")
     print("SQLite database: "+str(DB_PATH))
