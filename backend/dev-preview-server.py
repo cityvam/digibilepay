@@ -232,14 +232,17 @@ def create_otp(phone,purpose,pending=None):
     return {"ok":True,"message":"کد توسعه در ترمینال Codespaces چاپ شد.","expiresIn":OTP_TTL,"resendIn":60}
 
 def verify_otp(phone,purpose,code):
+    invalid = False
     with connect_db() as c:
         row = c.execute("SELECT * FROM otp_challenges WHERE phone=? AND purpose=?",(phone,purpose)).fetchone()
         if not row or row["expires_at"] < now(): raise ApiError(400,"کد تأیید وجود ندارد یا منقضی شده است.")
         if row["attempts"] >= 5: raise ApiError(429,"تعداد تلاش مجاز تمام شده است.")
         if not hmac.compare_digest(row["code_hash"],digest(normalize_digits(code).strip())):
             c.execute("UPDATE otp_challenges SET attempts=attempts+1 WHERE phone=? AND purpose=?",(phone,purpose))
-            raise ApiError(400,"کد تأیید نادرست است.")
-        return row
+            invalid = True
+    # Raise after the transaction commits so a failed attempt is counted.
+    if invalid: raise ApiError(400,"کد تأیید نادرست است.")
+    return row
 
 def create_ticket(phone):
     ticket = secrets.token_urlsafe(36)
