@@ -197,13 +197,38 @@ def init_db():
         seed_products(c)
 
 def product_json(row):
-    conditions = json.loads(row["conditions_json"])
-    return {"id":row["id"],"code":row["slug"],"slug":row["slug"],"name":row["name"],"title":row["name"],
+    stored_conditions = json.loads(row["conditions_json"] or "{}")
+    if not isinstance(stored_conditions, dict): stored_conditions = {}
+    config = stored_conditions.pop("_config", {})
+    if not isinstance(config, dict): config = {}
+    tiers = json.loads(row["tiers_json"] or "[]")
+    documents = json.loads(row["documents_json"] or "[]")
+    conditions = stored_conditions
+    active = bool(row["is_active"])
+    sort_order = int(row["sort_order"] or 0)
+    show_in_list = bool(config.get("showInList", True))
+    send_reminders = bool(config.get("sendReminders", True))
+    shape = {
+        "id": row["slug"], "slug": row["slug"], "name": row["name"],
+        "title": config.get("title") or row["name"], "description": row["description"],
+        "badge": row["badge"], "minAmount": row["min_amount"], "maxAmount": row["max_amount"],
+        "intervalDays": row["interval_days"], "tiers": tiers, "conditions": conditions,
+        "kind": conditions.get("kind", ""), "steps": conditions.get("steps", []),
+        "documents": documents, "interestMethod": config.get("interestMethod", "Monthly"),
+        "interestPercent": config.get("interestPercent", 0),
+        "lateDailyCoef": config.get("lateDailyCoef", 0),
+        "earlyDailyCoef": config.get("earlyDailyCoef", 0),
+        "showInList": show_in_list, "sendReminders": send_reminders,
+        "fullDescriptionHtml": config.get("fullDescriptionHtml", ""),
+        "labels": config.get("labels", []), "operationalCosts": config.get("operationalCosts", []),
+        "imageUrl": config.get("imageUrl", "")
+    }
+    return {"id":row["id"],"code":row["slug"],"slug":row["slug"],"name":row["name"],"title":shape["title"],
             "description":row["description"],"badge":row["badge"],"minAmount":row["min_amount"],
-            "maxAmount":row["max_amount"],"intervalDays":row["interval_days"],"tiers":json.loads(row["tiers_json"]),
-            "conditions":conditions,"kind":conditions.get("kind",""),"steps":conditions.get("steps",[]),
-            "documents":json.loads(row["documents_json"]),
-            "isActive":bool(row["is_active"]),"sortOrder":row["sort_order"]}
+            "maxAmount":row["max_amount"],"intervalDays":row["interval_days"],"tiers":tiers,
+            "conditions":conditions,"kind":shape["kind"],"steps":shape["steps"],"documents":documents,
+            "isActive":active,"sortOrder":sort_order,"showInList":show_in_list,
+            "sendReminders":send_reminders,"shape":shape,**{k:v for k,v in config.items() if k not in ("id","slug")}}
 
 def read_json(handler):
     try: length = int(handler.headers.get("Content-Length","0"))
@@ -711,9 +736,26 @@ def save_product(body,product_id=None):
     except (TypeError,ValueError): raise ApiError(400,"مبالغ و فاصله اقساط باید عددی باشند.")
     if min_amount<0 or max_amount<min_amount or interval<1: raise ApiError(400,"بازه مبلغ یا فاصله اقساط معتبر نیست.")
     tiers=body.get("tiers",body.get("Tiers",[])); conditions=body.get("conditions") or body.get("Conditions") or {}
+    if isinstance(conditions,str):
+        try: conditions=json.loads(conditions)
+        except json.JSONDecodeError: raise ApiError(400,"شرایط طرح باید JSON معتبر باشد.")
+    if not isinstance(conditions,dict): raise ApiError(400,"شرایط طرح معتبر نیست.")
+    conditions=dict(conditions)
     documents=body.get("documents") or body.get("Documents") or []
+    if isinstance(documents,str):
+        try: documents=json.loads(documents)
+        except json.JSONDecodeError: raise ApiError(400,"فهرست مدارک باید JSON معتبر باشد.")
+    if not isinstance(documents,list): raise ApiError(400,"فهرست مدارک معتبر نیست.")
+    existing_config=conditions.get("_config",{})
+    if not isinstance(existing_config,dict): existing_config={}
+    config=dict(existing_config)
+    for key in ("title","interestMethod","interestPercent","lateDailyCoef","earlyDailyCoef",
+                "showInList","sendReminders","fullDescriptionHtml","labels","operationalCosts","imageUrl"):
+        if key in body: config[key]=body[key]
+    conditions.pop("_config",None)
+    conditions["_config"]=config
     tiers_json=body.get("tiersJson") or body.get("TiersJson") or json.dumps(tiers,ensure_ascii=False)
-    cond_json=body.get("conditionsJson") or body.get("ConditionsJson") or json.dumps(conditions,ensure_ascii=False)
+    cond_json=json.dumps(conditions,ensure_ascii=False)
     docs_json=body.get("documentsJson") or body.get("DocumentsJson") or json.dumps(documents,ensure_ascii=False)
     active=0 if body.get("isActive",body.get("IsActive",True)) is False else 1
     badge=str(body.get("badge") or body.get("Badge") or ""); description=str(body.get("description") or body.get("Description") or "")
