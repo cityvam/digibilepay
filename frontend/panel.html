@@ -1097,21 +1097,30 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-o]');if(!b
 
 render();
 
-/* ===== بخش‌های واقعی (فقط نسخه‌ی سرور): به API وصل‌اند ===== */
-(()=>{
+/* ===== بخش‌های واقعی (فقط نسخه‌ی سرور): نقش از دیتابیس فعلی بررسی می‌شود ===== */
+(async()=>{
 const TK=()=>{for(const k of ['token','accessToken','jwt']){try{const v=localStorage.getItem(k);if(v)return v}catch(_){}}return null};
 const toLogin=()=>location.replace('/login.html?next='+encodeURIComponent(location.pathname));
-function jwt(){try{const p=TK().split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(decodeURIComponent(escape(atob(p))))}catch(_){return null}}
+function jwt(){try{const t=TK();if(!t)return null;const p=t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(decodeURIComponent(escape(atob(p))))}catch(_){return null}}
 const J=jwt();
 if(!J||(J.exp&&J.exp*1000<Date.now())){toLogin();return}
-const nm=J['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']||J.name||'مدیر';
-const roles=[].concat(J['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']||J.role||[]);
+let nm=J['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']||J.name||'مدیر';
+let roles=[].concat(J['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']||J.role||[]);
+try{
+ const meResponse=await fetch('/api/v1/auth/me',{headers:{Authorization:'Bearer '+TK()},credentials:'same-origin',cache:'no-store'});
+ if(meResponse.status===401){toLogin();return}
+ if(meResponse.ok){
+  const meEnvelope=await meResponse.json();const current=meEnvelope.data||meEnvelope;
+  nm=current.fullName||current.name||nm;
+  roles=Array.isArray(current.roles)?current.roles:[current.role||''];
+ }
+}catch(_){}
 if(!roles.some(r=>r==='Admin'||r==='SuperAdmin')){document.body.innerHTML='<div style="max-width:420px;margin:15vh auto;text-align:center;font-family:inherit"><h2>دسترسی ندارید</h2><p>این پنل فقط برای مدیران است.</p><a href="/">بازگشت به سایت</a></div>';return}
 const SUPER=roles.includes('SuperAdmin');
 async function api(m,u,b,raw){const h={Authorization:'Bearer '+TK()};if(b&&!(b instanceof FormData))h['Content-Type']='application/json';
- const r=await fetch(u,{method:m,headers:h,body:b?JSON.stringify(b):undefined});
+ const r=await fetch(u,{method:m,headers:h,body:b?((b instanceof FormData)?b:JSON.stringify(b)):undefined,credentials:'same-origin'});
  if(r.status===401){toLogin();throw new Error('نشست منقضی شد')}if(r.status===403)throw new Error('دسترسی این بخش را ندارید');
- if(raw)return r;const j=await r.json().catch(()=>null);if(!r.ok)throw new Error((j&&(j.message||j.title))||'خطا '+r.status);return j}
+ if(raw)return r;const j=await r.json().catch(()=>null);if(!r.ok)throw new Error((j&&(j.message||j.title))||'خطا '+r.status);return j&&Object.prototype.hasOwnProperty.call(j,'data')?j.data:j}
 const toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d));
 const ok=f=>async(...a)=>{try{await f(...a)}catch(e){toast(e.message||'خطا')}};
 const D=h=>{const d=document.getElementById('ldr');d.hidden=false;d.innerHTML='<p><button class="btn" data-l="close">بستن ×</button></p>'+h};
