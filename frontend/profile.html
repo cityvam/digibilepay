@@ -1,26 +1,162 @@
 <!doctype html>
-<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حساب کاربری | دیجی‌بایل پی"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap">
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>حساب مشتری | دیجی‌بایل پی</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap">
 <style>
-:root{color-scheme:light;--bg:#f7f4fb;--surface:#fff;--line:#e2d8ef;--fg:#201432;--muted:#70617f;--brand:#3b1f6b;--accent:#f5a400}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.8 Vazirmatn,Tahoma,sans-serif;padding:24px 16px}.wrap{max-width:860px;margin:auto}.head,.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:14px}.head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.head h1{font-size:1.3rem;margin:0}.muted{color:var(--muted);font-size:.9rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.tile{border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}.tile small{display:block;color:var(--muted)}.tile b{overflow-wrap:anywhere}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:9px 14px;text-decoration:none;color:var(--fg);background:#fff;font:inherit;cursor:pointer}.primary{background:var(--accent);border-color:var(--accent);font-weight:700}.status{padding:8px 12px;border-radius:10px;background:#fff7e2;color:#795400}.brand{font-weight:900;color:var(--brand)}#error{color:#a1263f}
-</style></head><body><main class="wrap">
-<header class="head"><div style="font-size:2rem;color:var(--brand)">◈</div><div style="flex:1"><h1>حساب کاربری</h1><div class="muted">اطلاعات حساب و دسترسی‌های شما</div></div><a class="btn" href="/">صفحهٔ اصلی</a></header>
-<div id="message" class="status">در حال دریافت اطلاعات حساب…</div>
-<section id="content" class="card" hidden></section>
-<section class="card"><h2>خدمات حساب</h2><div class="actions"><a class="btn primary" href="/documents.html">مدارک من</a><a class="btn" href="/contracts.html">قراردادهای من</a><a class="btn" href="/#plan-beta">طرح بتا بانک رفاه</a><a class="btn" href="/panel.html" id="admin" hidden>پنل مدیریت</a><button class="btn" id="logout">خروج از حساب</button></div><p class="muted">در پیش‌نمایش Codespaces، مدارک و قراردادها فقط در دیتابیس آزمایشی ذخیره می‌شوند. استعلام واقعی بانک و OCR فعال نیست.</p></section>
-</main><script>
-const keys=['token','accessToken','jwt'];let token=null;
+:root{--bg:#f5f3fa;--surface:#fff;--line:#e2d9ed;--fg:#241638;--muted:#72647e;--brand:#3b1f6b;--accent:#f5a400;--ok:#13795b;--bad:#a1263f;--warn:#795400}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.8 Vazirmatn,Tahoma,sans-serif;padding:20px 14px 48px}
+.wrap{max-width:1100px;margin:auto}.top{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:16px}
+.brand{font-weight:900;color:var(--brand);font-size:1.15rem}.muted{color:var(--muted);font-size:.88rem}.small{font-size:.8rem;color:var(--muted)}
+h1{font-size:1.3rem;margin:0}h2{font-size:1.08rem;margin:0 0 10px}h3{font-size:.98rem;margin:0 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.main-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(280px,.85fr);gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;min-width:0}
+.tile{border:1px solid var(--line);border-radius:12px;padding:12px;min-width:0}.tile small{display:block;color:var(--muted);font-size:.8rem}.tile b{overflow-wrap:anywhere}
+.btn{display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:10px;padding:8px 13px;text-decoration:none;color:var(--fg);background:#fff;font:inherit;font-size:.9rem;cursor:pointer;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);font-weight:700}.btn.brand-btn{background:var(--brand);border-color:var(--brand);color:#fff}.btn:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.status{padding:10px 12px;border-radius:10px;background:#fff7e2;color:var(--warn);margin-bottom:14px;overflow-wrap:anywhere}
+.status.ok{background:#eaf7f0;color:var(--ok)}.status.error{background:#fff0f2;color:var(--bad)}.hidden{display:none!important}
+.products{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px}.product{border:1px solid var(--line);border-radius:14px;padding:14px;min-width:0}.product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.pill{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:1px 9px;font-size:.76rem;white-space:nowrap}.pill.ok{color:var(--ok);border-color:#9cd5b7}.pill.bad{color:var(--bad);border-color:#e4a8b2}.pill.warn{color:var(--warn);border-color:#e6cf83}.facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.facts div{background:#f8f6fb;border-radius:9px;padding:8px}.facts small{display:block;color:var(--muted);font-size:.75rem}.facts b{font-size:.9rem;overflow-wrap:anywhere}
+label{display:block;font-size:.8rem;color:var(--muted);margin:8px 0 3px}input,select{width:100%;min-width:0;min-height:42px;font:inherit;border:1px solid var(--line);border-radius:9px;padding:7px 10px;background:#fff;color:var(--fg)}input[type=number]{direction:ltr;text-align:right}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.form-actions{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+.table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:620px;font-size:.86rem}th,td{text-align:right;padding:9px 8px;border-bottom:1px solid var(--line);white-space:normal}th{color:var(--muted);font-weight:500}td.money{direction:ltr;text-align:right;font-variant-numeric:tabular-nums}
+.empty{padding:16px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);text-align:center}.notice{background:#fff7e2;color:var(--warn);padding:10px;border-radius:10px;font-size:.85rem}
+@media(max-width:760px){.main-grid{grid-template-columns:1fr}.card{padding:13px}.form-grid{grid-template-columns:1fr}.top .actions{width:100%}.top .btn{flex:1}}
+</style>
+</head>
+<body>
+<main class="wrap">
+<header class="top">
+  <div><div class="brand">دیجی‌بایل پی</div><h1>پروفایل مشتری</h1><div class="muted">اطلاعات حساب، طرح‌های وام و پیگیری درخواست‌ها</div></div>
+  <div class="actions"><a class="btn" href="/">صفحهٔ اصلی</a><a class="btn" href="/documents.html">مدارک</a><a class="btn" href="/contracts.html">قراردادها</a><a class="btn" id="loginLink" href="/login.html?next=%2Fprofile.html">ورود</a><button class="btn" id="logout" type="button">خروج</button></div>
+</header>
+<div id="message" class="status" role="status" aria-live="polite">در حال بارگذاری پروفایل و طرح‌ها…</div>
+<section class="card" id="accountCard">
+  <h2>اطلاعات حساب</h2><div id="accountInfo" class="grid"><div class="empty">برای نمایش اطلاعات حساب در حال اتصال هستیم.</div></div>
+</section>
+<section class="card">
+  <div class="product-head"><div><h2>طرح‌های وام قابل درخواست</h2><p class="muted">مبالغ، تعداد اقساط و شرایط از تعریف طرح در سرور خوانده می‌شوند.</p></div></div>
+  <div id="products" class="products"><div class="empty">طرح‌ها در حال بارگذاری هستند…</div></div>
+  <p class="notice" style="margin-top:12px">ثبت درخواست در این محیط فقط آزمایشی است و به معنی تأیید اعتبار، صدور وام یا انتقال وجه نیست. طرح بتا تا اتصال واقعی بانک فقط قابل مشاهده است.</p>
+</section>
+<section class="card">
+  <div class="product-head"><div><h2>درخواست‌های من</h2><p class="muted">درخواست‌هایی که با این حساب ثبت کرده‌اید.</p></div><button class="btn" id="refresh" type="button">تازه‌سازی</button></div>
+  <div id="applications"><div class="empty">ابتدا وارد حساب شوید تا درخواست‌ها نمایش داده شوند.</div></div>
+</section>
+<section class="card">
+  <h2>اقساط من</h2>
+  <div id="installments"><div class="empty">برنامهٔ اقساط پس از طی فرایند قرارداد و تأیید نهایی ثبت خواهد شد.</div></div>
+</section>
+</main>
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fa=n=>Number(n||0).toLocaleString("fa-IR");
+const money=n=>fa(n)+" تومان";
+const keys=["token","accessToken","jwt"];
+let token=null, currentUser=null, products=[], applications=[], installments=[];
 for(const k of keys){try{const v=localStorage.getItem(k);if(v){token=v;break}}catch(_){}}
-const msg=document.querySelector('#message');
-if(!token){location.replace('/login.html?next=%2Fprofile.html')}
-else fetch('/api/v1/auth/me',{headers:{Authorization:'Bearer '+token},credentials:'same-origin',cache:'no-store'}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'نشست معتبر نیست؛ دوباره وارد شوید.');return j.data||j}).then(u=>{
-document.querySelector('#content').hidden=false;
-const role=u.role||((u.roles||[])[0])||'Customer';
-const labels={SuperAdmin:'مدیر کل',Admin:'مدیر',Customer:'مشتری',Merchant:'پذیرنده',Agent:'نماینده'};
-document.querySelector('#content').innerHTML='<h2>اطلاعات حساب</h2><div class="grid"><div class="tile"><small>نام و نام خانوادگی</small><b>'+escapeHtml(u.fullName||u.name||'—')+'</b></div><div class="tile"><small>شماره موبایل</small><b dir="ltr">'+escapeHtml(u.phoneNumber||'—')+'</b></div><div class="tile"><small>ایمیل</small><b>'+escapeHtml(u.email||'ثبت نشده')+'</b></div><div class="tile"><small>نقش</small><b class="brand">'+escapeHtml(labels[role]||role)+'</b></div></div>';
-if(['SuperAdmin','Admin'].includes(role))document.querySelector('#admin').hidden=false;
-msg.textContent='حساب با موفقیت بارگذاری شد.';
-}).catch(e=>{msg.id='error';msg.textContent=e.message;setTimeout(()=>location.replace('/login.html?next=%2Fprofile.html'),900)});
-function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-document.querySelector('#logout').onclick=()=>{for(const k of keys){try{localStorage.removeItem(k)}catch(_){}}location.replace('/login.html')};
-</script></body></html>
+const msg=(text,kind="")=>{$("#message").textContent=text;$("#message").className="status"+(kind?" "+kind:"")};
+async function api(url,options={}){
+  const headers=new Headers(options.headers||{});
+  if(token)headers.set("Authorization","Bearer "+token);
+  if(options.body && !(options.body instanceof FormData))headers.set("Content-Type","application/json");
+  const response=await fetch(url,{...options,headers,credentials:"same-origin",cache:"no-store"});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(data.message||data.title||("خطای سرور: "+response.status));
+  return Object.prototype.hasOwnProperty.call(data,"data")?data.data:data;
+}
+function statusMeta(s){
+ const map={Pending:["در انتظار بررسی","warn"],UnderReview:["در حال بررسی","warn"],Approved:["تأیید اولیه","ok"],Rejected:["رد شده","bad"],Presented:["در انتظار قرارداد","warn"],Signed:["قرارداد امضا شده","ok"],Issued:["صادرشده","ok"],Completed:["تکمیل‌شده","ok"]};
+ return map[s]||[s||"نامشخص",""];
+}
+function renderAccount(){
+ if(!currentUser){
+  $("#accountInfo").innerHTML='<div class="empty">برای دیدن اطلاعات حساب و درخواست‌ها وارد شوید.</div>';
+  $("#loginLink").classList.remove("hidden");
+  return;
+ }
+ const role=currentUser.role||((currentUser.roles||[])[0])||"Customer";
+ const roles={SuperAdmin:"مدیر کل",Admin:"مدیر",Customer:"مشتری",Merchant:"پذیرنده",Agent:"نماینده"};
+ $("#accountInfo").innerHTML=[
+  ["نام و نام خانوادگی",currentUser.fullName||currentUser.name||"—"],
+  ["شماره موبایل",currentUser.phoneNumber||currentUser.phone||"—"],
+  ["ایمیل",currentUser.email||"ثبت نشده"],
+  ["نقش",roles[role]||role]
+ ].map(([label,value])=>'<div class="tile"><small>'+esc(label)+'</small><b>'+esc(value)+'</b></div>').join("");
+ $("#loginLink").classList.add("hidden");
+}
+function renderProducts(){
+ if(!products.length){$("#products").innerHTML='<div class="empty">فعلاً طرح فعالی برای درخواست تعریف نشده است. مدیر باید از پنل «محصولات وام» یک طرح بسازد و آن را فعال کند.</div>';return;}
+ $("#products").innerHTML=products.map(p=>{
+  const tiers=Array.isArray(p.tiers)?p.tiers:[];
+  const beta=p.kind==="beta"||p.slug==="beta"||p.code==="beta";
+  const min=Number(p.minAmount||0),max=Number(p.maxAmount||0);
+  const options=tiers.map(t=>{const m=Number(t.months||t.m||0);return m?'<option value="'+m+'">'+fa(m)+' ماه · کارمزد '+fa(t.feePercent??t.fee??0)+'٪ · پیش‌پرداخت '+fa(t.downPaymentPercent??t.down??0)+'٪</option>':""}).join("");
+  const planId=esc(p.id);
+  return '<article class="product"><div class="product-head"><h3>'+esc(p.title||p.name||"طرح وام")+'</h3><span class="pill">'+esc(p.badge||"فعال")+'</span></div>'+
+    '<p class="muted">'+esc(p.description||"شرایط این طرح در سامانه ثبت شده است.")+'</p>'+
+    '<div class="facts"><div><small>حداقل مبلغ</small><b>'+money(min)+'</b></div><div><small>حداکثر مبلغ</small><b>'+money(max)+'</b></div><div><small>فاصلهٔ اقساط</small><b>'+fa(p.intervalDays||30)+' روز</b></div><div><small>مدت‌های تعریف‌شده</small><b>'+esc(tiers.length?tiers.map(t=>fa(t.months||t.m)+" ماه").join("، "):"طبق استعلام بانک")+'</b></div></div>'+
+    (beta?'<div class="notice">استعلام بانک به محیط آزمایشی وصل نیست؛ ثبت درخواست واقعی فعال نیست.</div>':
+    '<form class="apply-form" data-product="'+planId+'"><div class="form-grid"><div><label for="amount-'+planId+'">مبلغ درخواست (تومان)</label><input id="amount-'+planId+'" name="amount" type="number" inputmode="numeric" min="'+min+'" max="'+max+'" step="1000" value="'+min+'" required></div><div><label for="months-'+planId+'">تعداد اقساط</label><select id="months-'+planId+'" name="months" required>'+options+'</select></div></div><div class="form-actions"><button class="btn primary" type="submit" '+(!token||!tiers.length?"disabled":"")+'>'+(!token?"برای درخواست وارد شوید":"ثبت درخواست آزمایشی")+'</button></div></form>')+
+  '</article>';
+ }).join("");
+}
+function renderApplications(){
+ if(!token){$("#applications").innerHTML='<div class="empty">برای مشاهدهٔ درخواست‌ها <a href="/login.html?next=%2Fprofile.html">وارد حساب شوید</a>.</div>';return;}
+ if(!applications.length){$("#applications").innerHTML='<div class="empty">هنوز درخواستی برای وام ثبت نکرده‌اید. از طرح‌های بالا یک درخواست ایجاد کنید.</div>';return;}
+ $("#applications").innerHTML='<div class="table-wrap"><table><thead><tr><th>طرح</th><th>مبلغ</th><th>مدت</th><th>قسط تخمینی</th><th>وضعیت</th><th>تاریخ درخواست</th></tr></thead><tbody>'+
+ applications.map(a=>{const st=statusMeta(a.status);return '<tr><td>'+esc(a.productName||a.productSlug||"طرح وام")+'<div class="small">'+esc(a.id)+'</div></td><td class="money">'+money(a.amount)+'</td><td>'+fa(a.months)+' ماه</td><td class="money">'+money(a.estimatedMonthlyPayment||0)+'<div class="small">برآورد اولیه، غیرالزام‌آور</div></td><td><span class="pill '+st[1]+'">'+esc(st[0])+'</span></td><td>'+esc(a.createdAt?new Date(a.createdAt).toLocaleDateString("fa-IR"):"—")+'</td></tr>'}).join("")+
+ '</tbody></table></div><p class="small">درخواست‌های این صفحه داده‌های آزمایشی هستند؛ تأیید اولیه معادل صدور یا پرداخت تسهیلات نیست.</p>';
+}
+function renderInstallments(){
+ if(!token){$("#installments").innerHTML='<div class="empty">برای مشاهدهٔ اقساط وارد حساب شوید.</div>';return;}
+ if(!installments.length){$("#installments").innerHTML='<div class="empty">برای حساب شما هنوز برنامهٔ قسطی در سرور ثبت نشده است. برنامهٔ اقساط فقط پس از تأیید نهایی و ثبت قرارداد ایجاد می‌شود.</div>';return;}
+ $("#installments").innerHTML='<div class="table-wrap"><table><thead><tr><th>طرح</th><th>شماره قسط</th><th>سررسید</th><th>مبلغ</th><th>وضعیت</th></tr></thead><tbody>'+
+ installments.map(i=>'<tr><td>'+esc(i.productName||i.applicationId||"—")+'</td><td>'+fa(i.number||i.installmentNo||0)+'</td><td>'+esc(i.dueDate||"—")+'</td><td class="money">'+money(i.amount||0)+'</td><td>'+esc(i.status||"ثبت‌شده")+'</td></tr>').join("")+'</tbody></table></div>';
+}
+async function load(){
+ products=[];applications=[];installments=[];
+ try{const r=await api("/api/v1/loan-products");products=Array.isArray(r)?r:[];}catch(e){msg("بارگذاری طرح‌های وام ناموفق بود: "+e.message,"error");}
+ renderProducts();
+ if(!token){
+  currentUser=null;renderAccount();renderApplications();renderInstallments();
+  msg("برای دیدن حساب و ثبت درخواست وام، ابتدا وارد شوید.","");
+  return;
+ }
+ try{
+  currentUser=await api("/api/v1/auth/me");
+  const result=await Promise.all([
+   api("/api/v1/me/loan-applications"),
+   api("/api/v1/me/installments")
+  ]);
+  applications=Array.isArray(result[0])?result[0]:[];
+  installments=Array.isArray(result[1])?result[1]:[];
+  renderAccount();renderApplications();renderInstallments();
+  msg("پروفایل و تعریف‌های وام با موفقیت بارگذاری شدند.","ok");
+ }catch(e){
+  currentUser=null;renderAccount();renderApplications();renderInstallments();
+  msg("اطلاعات حساب بارگذاری نشد: "+e.message+" — صفحه خالی نمی‌شود؛ از دکمهٔ ورود دوباره استفاده کنید.","error");
+ }
+ renderProducts();
+}
+$("#products").addEventListener("submit",async e=>{
+ const form=e.target.closest(".apply-form");if(!form)return;e.preventDefault();
+ if(!token){location.href="/login.html?next=%2Fprofile.html";return;}
+ const productId=form.dataset.product,amount=Number(form.elements.amount.value),months=Number(form.elements.months.value);
+ const button=form.querySelector("button[type=submit]");button.disabled=true;button.textContent="در حال ثبت…";
+ try{
+  const result=await api("/api/v1/me/loan-applications",{method:"POST",body:JSON.stringify({productId,amount,months})});
+  msg((result.notice||"درخواست آزمایشی ثبت شد."),"ok");
+  const response=await api("/api/v1/me/loan-applications");applications=Array.isArray(response)?response:[];
+  renderApplications();
+ }catch(err){msg(err.message,"error");}
+ finally{button.disabled=false;button.textContent="ثبت درخواست آزمایشی";}
+});
+$("#refresh").onclick=()=>load();
+$("#logout").onclick=()=>{for(const k of keys){try{localStorage.removeItem(k)}catch(_){}}token=null;currentUser=null;renderAccount();renderApplications();renderInstallments();renderProducts();msg("از حساب خارج شدید. برای مشاهدهٔ اطلاعات مشتری دوباره وارد شوید.");};
+load().catch(e=>msg("خطا در بارگذاری پروفایل: "+e.message,"error"));
+</script>
+</body></html>

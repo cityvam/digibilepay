@@ -197,13 +197,38 @@ def init_db():
         seed_products(c)
 
 def product_json(row):
-    conditions = json.loads(row["conditions_json"])
-    return {"id":row["id"],"code":row["slug"],"slug":row["slug"],"name":row["name"],"title":row["name"],
+    stored_conditions = json.loads(row["conditions_json"] or "{}")
+    if not isinstance(stored_conditions, dict): stored_conditions = {}
+    config = stored_conditions.pop("_config", {})
+    if not isinstance(config, dict): config = {}
+    tiers = json.loads(row["tiers_json"] or "[]")
+    documents = json.loads(row["documents_json"] or "[]")
+    conditions = stored_conditions
+    active = bool(row["is_active"])
+    sort_order = int(row["sort_order"] or 0)
+    show_in_list = bool(config.get("showInList", True))
+    send_reminders = bool(config.get("sendReminders", True))
+    shape = {
+        "id": row["slug"], "slug": row["slug"], "name": row["name"],
+        "title": config.get("title") or row["name"], "description": row["description"],
+        "badge": row["badge"], "minAmount": row["min_amount"], "maxAmount": row["max_amount"],
+        "intervalDays": row["interval_days"], "tiers": tiers, "conditions": conditions,
+        "kind": conditions.get("kind", ""), "steps": conditions.get("steps", []),
+        "documents": documents, "interestMethod": config.get("interestMethod", "Monthly"),
+        "interestPercent": config.get("interestPercent", 0),
+        "lateDailyCoef": config.get("lateDailyCoef", 0),
+        "earlyDailyCoef": config.get("earlyDailyCoef", 0),
+        "showInList": show_in_list, "sendReminders": send_reminders,
+        "fullDescriptionHtml": config.get("fullDescriptionHtml", ""),
+        "labels": config.get("labels", []), "operationalCosts": config.get("operationalCosts", []),
+        "imageUrl": config.get("imageUrl", "")
+    }
+    return {"id":row["id"],"code":row["slug"],"slug":row["slug"],"name":row["name"],"title":shape["title"],
             "description":row["description"],"badge":row["badge"],"minAmount":row["min_amount"],
-            "maxAmount":row["max_amount"],"intervalDays":row["interval_days"],"tiers":json.loads(row["tiers_json"]),
-            "conditions":conditions,"kind":conditions.get("kind",""),"steps":conditions.get("steps",[]),
-            "documents":json.loads(row["documents_json"]),
-            "isActive":bool(row["is_active"]),"sortOrder":row["sort_order"]}
+            "maxAmount":row["max_amount"],"intervalDays":row["interval_days"],"tiers":tiers,
+            "conditions":conditions,"kind":shape["kind"],"steps":shape["steps"],"documents":documents,
+            "isActive":active,"sortOrder":sort_order,"showInList":show_in_list,
+            "sendReminders":send_reminders,"shape":shape,**{k:v for k,v in config.items() if k not in ("id","slug")}}
 
 def read_json(handler):
     try: length = int(handler.headers.get("Content-Length","0"))
@@ -514,6 +539,20 @@ def preview_admin_post(handler, path, body):
             return {"data":public_record(save_record("contract-templates",cloned,new_id,user["id"],"new-version"))}
         status={"approve":"Approved","publish":"Published","archive":"Archived"}[action]
         return {"data":public_record(save_record("contract-templates",{"status":status},ident,user["id"],action))}
+    match=re.fullmatch(r"/api/v1/admin/loan-applications/([^/]+)/status",path,re.I)
+    if match:
+        user=require_admin(handler); ident=match.group(1)
+        item=record_get("loan-applications",ident)
+        if not item: raise ApiError(404,"درخواست وام پیدا نشد.")
+        requested=str(body.get("status") or "").strip()
+        allowed={"Pending","UnderReview","Approved","Rejected"}
+        if requested not in allowed:
+            raise ApiError(400,"وضعیت باید یکی از در انتظار، در حال بررسی، تأیید یا رد باشد؛ صدور واقعی از این پیش‌نمایش انجام نمی‌شود.")
+        history=list(item.get("history",[])); history.append({"at":iso_now(),"status":requested,
+          "note":str(body.get("note") or ""),"actorId":user["id"]})
+        updated=save_record("loan-applications",{"status":requested,"updatedAt":iso_now(),"history":history},
+                            ident,user["id"],"application-status")
+        return {"data":public_record(updated)}
     if p=="/api/v1/admin/contract-variables/sync-defaults":
         defaults=[
           {"key":"user.fullName","label":"نام و نام خانوادگی","dataType":"String","source":"User","path":"fullName","required":True,"format":"","sensitivity":"Normal","defaultValue":"","validation":""},
@@ -662,7 +701,8 @@ def api_get(handler,path,query):
         return 200,{"data":{"name":t["name"],"brand":{"primary":t["brand_primary"],"accent":t["brand_accent"],"logoText":t["logo_text"]}}}
     if p=="/api/v1/loan-products":
         with connect_db() as c: rows=c.execute("SELECT * FROM loan_products WHERE is_active=1 ORDER BY sort_order,name").fetchall()
-        return 200,{"data":[product_json(r) for r in rows]}
+        products=[product_json(r) for r in rows]
+        return 200,{"data":[x for x in products if x.get("showInList",True)]}
     if p=="/api/v1/security/captcha": return 200,create_captcha()
     if p=="/api/v1/security/otp/status":
         phone=normalize_phone((query.get("phone") or [""])[0])
@@ -670,10 +710,36 @@ def api_get(handler,path,query):
         with connect_db() as c: row=c.execute("SELECT expires_at,resend_at FROM otp_challenges WHERE phone=? ORDER BY created_at DESC LIMIT 1",(phone,)).fetchone()
         return 200,{"expiresIn":max(0,row["expires_at"]-now()) if row else 0,"resendIn":max(0,row["resend_at"]-now()) if row else 0}
     if p=="/api/v1/auth/me": return 200,{"data":safe_user(auth_user(handler))}
+    if p=="/api/v1/me/loan-applications":
+        user=auth_user(handler)
+        rows=[x for x in record_list("loan-applications") if str(x.get("userId") or "") in (str(user["id"]),str(user["phone"]))]
+        return 200,{"data":[public_record(x) for x in rows]}
+    if p=="/api/v1/me/installments":
+        user=auth_user(handler)
+        rows=[x for x in record_list("installments") if str(x.get("userId") or "") in (str(user["id"]),str(user["phone"]))]
+        return 200,{"data":[public_record(x) for x in rows]}
+    if p=="/api/v1/admin/loan-applications":
+        require_admin(handler)
+        rows=record_list("loan-applications")
+        return 200,{"data":[public_record(x) for x in rows]}
+    match=re.fullmatch(r"/api/v1/admin/loan-applications/([^/]+)",path,re.I)
+    if match:
+        require_admin(handler); item=record_get("loan-applications",match.group(1))
+        if not item: raise ApiError(404,"درخواست وام پیدا نشد.")
+        return 200,{"data":public_record(item)}
     if p=="/api/v1/admin/loan-products":
         require_admin(handler)
         with connect_db() as c: rows=c.execute("SELECT * FROM loan_products ORDER BY sort_order,name").fetchall()
         return 200,{"data":[product_json(r) for r in rows]}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)",path,re.I)
+    if match:
+        require_admin(handler); ident=match.group(1)
+        if ident.lower()=="labels":
+            with connect_db() as c: labels=c.execute("SELECT id,name,slug FROM loan_products ORDER BY sort_order,name").fetchall()
+            return 200,{"data":[{"id":r["id"],"value":r["id"],"name":r["name"],"label":r["name"],"slug":r["slug"]} for r in labels]}
+        with connect_db() as c: row=c.execute("SELECT * FROM loan_products WHERE id=? OR slug=?",(ident,ident)).fetchone()
+        if not row: raise ApiError(404,"طرح وام پیدا نشد.")
+        return 200,{"data":product_json(row)}
     if p=="/api/v1/admin/users":
         require_admin(handler)
         with connect_db() as c: rows=c.execute("SELECT * FROM app_users ORDER BY created_at DESC").fetchall()
@@ -711,9 +777,26 @@ def save_product(body,product_id=None):
     except (TypeError,ValueError): raise ApiError(400,"مبالغ و فاصله اقساط باید عددی باشند.")
     if min_amount<0 or max_amount<min_amount or interval<1: raise ApiError(400,"بازه مبلغ یا فاصله اقساط معتبر نیست.")
     tiers=body.get("tiers",body.get("Tiers",[])); conditions=body.get("conditions") or body.get("Conditions") or {}
+    if isinstance(conditions,str):
+        try: conditions=json.loads(conditions)
+        except json.JSONDecodeError: raise ApiError(400,"شرایط طرح باید JSON معتبر باشد.")
+    if not isinstance(conditions,dict): raise ApiError(400,"شرایط طرح معتبر نیست.")
+    conditions=dict(conditions)
     documents=body.get("documents") or body.get("Documents") or []
+    if isinstance(documents,str):
+        try: documents=json.loads(documents)
+        except json.JSONDecodeError: raise ApiError(400,"فهرست مدارک باید JSON معتبر باشد.")
+    if not isinstance(documents,list): raise ApiError(400,"فهرست مدارک معتبر نیست.")
+    existing_config=conditions.get("_config",{})
+    if not isinstance(existing_config,dict): existing_config={}
+    config=dict(existing_config)
+    for key in ("title","interestMethod","interestPercent","lateDailyCoef","earlyDailyCoef",
+                "showInList","sendReminders","fullDescriptionHtml","labels","operationalCosts","imageUrl"):
+        if key in body: config[key]=body[key]
+    conditions.pop("_config",None)
+    conditions["_config"]=config
     tiers_json=body.get("tiersJson") or body.get("TiersJson") or json.dumps(tiers,ensure_ascii=False)
-    cond_json=body.get("conditionsJson") or body.get("ConditionsJson") or json.dumps(conditions,ensure_ascii=False)
+    cond_json=json.dumps(conditions,ensure_ascii=False)
     docs_json=body.get("documentsJson") or body.get("DocumentsJson") or json.dumps(documents,ensure_ascii=False)
     active=0 if body.get("isActive",body.get("IsActive",True)) is False else 1
     badge=str(body.get("badge") or body.get("Badge") or ""); description=str(body.get("description") or body.get("Description") or "")
@@ -722,7 +805,8 @@ def save_product(body,product_id=None):
         exists=c.execute("SELECT id FROM loan_products WHERE id=?",(product_id,)).fetchone()
         values=(name,slug,description,badge,min_amount,max_amount,interval,tiers_json,cond_json,docs_json,active)
         if exists:
-            c.execute("UPDATE loan_products SET name=?,slug=?,description=?,badge=?,min_amount=?,max_amount=?,interval_days=?,tiers_json=?,conditions_json=?,documents_json=?,is_active=? WHERE id=?",values+(product_id,))
+            c.execute("UPDATE loan_products SET name=?,slug=?,description=?,badge=?,min_amount=?,max_amount=?,interval_days=?,tiers_json=?,conditions_json=?,documents_json=?,is_active=?,sort_order=? WHERE id=?",
+                      values+(int(body.get("sortOrder") or 0),product_id))
         else:
             c.execute("""INSERT INTO loan_products(id,name,slug,description,badge,min_amount,max_amount,interval_days,tiers_json,conditions_json,documents_json,is_active,sort_order,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (product_id,name,slug,description,badge,min_amount,max_amount,interval,tiers_json,cond_json,docs_json,active,int(body.get("sortOrder") or 100),iso_now()))
@@ -822,6 +906,38 @@ def api_post(handler,path,body):
             user=add_user(c,str(pending.get("fullName") or ""),phone,pending["password_hash"],"Customer",pending.get("email"),normalize_digits(pending.get("nationalCode") or "") or None)
             c.execute("DELETE FROM otp_challenges WHERE phone=? AND purpose=?",(phone,"home-register"))
         token=issue_token(user); return 200,{"data":{"accessToken":token,"token":token,"user":safe_user(user)}}
+    if p=="/api/v1/me/loan-applications":
+        user=auth_user(handler)
+        product_key=str(body.get("productId") or body.get("productSlug") or "").strip()
+        with connect_db() as c:
+            product=c.execute("SELECT * FROM loan_products WHERE (id=? OR slug=?) AND is_active=1",(product_key,product_key)).fetchone()
+        if not product: raise ApiError(404,"طرح وام پیدا نشد یا غیرفعال است.")
+        plan=product_json(product)
+        if plan.get("kind")=="beta" or plan.get("slug")=="beta":
+            raise ApiError(503,"ثبت درخواست بتا به اتصال معتبر استعلام بانک وابسته است؛ در این پیش‌نمایش فعال نیست.")
+        try: amount=int(body.get("amount") or 0); months=int(body.get("months") or 0)
+        except (TypeError,ValueError): raise ApiError(400,"مبلغ و تعداد اقساط باید عددی باشند.")
+        if amount<product["min_amount"] or amount>product["max_amount"]:
+            raise ApiError(400,"مبلغ خارج از بازهٔ مجاز این طرح است.")
+        tiers=plan.get("tiers") or []
+        tier=next((t for t in tiers if int(t.get("months") or t.get("m") or 0)==months),None)
+        if not tier: raise ApiError(400,"تعداد اقساط انتخاب‌شده برای این طرح تعریف نشده است.")
+        try:
+            fee=float(tier.get("feePercent",tier.get("fee",0)) or 0)
+            down_pct=float(tier.get("downPaymentPercent",tier.get("down",0)) or 0)
+        except (TypeError,ValueError): raise ApiError(400,"شرایط کارمزد یا پیش‌پرداخت طرح معتبر نیست.")
+        down=round(amount*down_pct/100); financed=amount-down
+        total=round(financed*(1+(fee/100)*months)); monthly=round(total/months)
+        application={"id":str(uuid.uuid4()),"userId":user["id"],"userName":user["full_name"],
+          "userPhone":user["phone"],"productId":product["id"],"productSlug":product["slug"],
+          "productName":product["name"],"amount":amount,"months":months,"feePercent":fee,
+          "downPaymentPercent":down_pct,"downPayment":down,"financedAmount":financed,
+          "estimatedTotal":total,"estimatedMonthlyPayment":monthly,"status":"Pending",
+          "createdAt":iso_now(),"updatedAt":iso_now(),
+          "history":[{"at":iso_now(),"status":"Pending","note":"درخواست در محیط آزمایشی ثبت شد."}]}
+        saved=save_record("loan-applications",application,actor_id=user["id"],action="apply-loan")
+        return 201,{"data":public_record(saved),
+          "notice":"درخواست در دیتابیس آزمایشی ثبت شد؛ این ثبت به معنی تأیید یا پرداخت تسهیلات نیست."}
     if p=="/api/v1/beta/inquiry": raise ApiError(503,"اتصال واقعی به سرویس استعلام بانک در این محیط تنظیم نشده است.")
     if p=="/api/v1/admin/loan-products":
         require_admin(handler); return 201,{"data":save_product(body)}
