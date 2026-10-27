@@ -141,6 +141,12 @@ def find_user(conn, login):
 
 def seed_products(conn):
     items = [
+        ("beta", "طرح بتا بانک رفاه", "beta",
+         "طرح آزمایشی استعلام تسهیلات بانک رفاه؛ در محیط پیش‌نمایش، استعلام واقعی بانک وصل نیست.",
+         "جدید", 0, 0, 30, [],
+         {"kind":"beta","steps":["عضویت و تأیید موبایل","ثبت کد ملی و رضایت استعلام","استعلام مبلغ و جدول اقساط از بانک","بارگذاری مدارک و بررسی کارشناس"],
+          "minAge":18,"maxAge":70,"minIncome":0,"kyc":1,"minScore":0,"maxActive":1},
+         [{"name":"کارت ملی","required":True},{"name":"مدارک تعیین‌شده توسط طرح","required":True}], 0),
         ("p3", "اقساط ۳ ماهه", "p3", "برای خریدهای کوچک و روزمره", "بدون پیش‌پرداخت", 1000000, 20000000, 30,
          [{"months":3,"feePercent":2,"downPaymentPercent":0}],
          {"minAge":22,"maxAge":60,"minIncome":6,"kyc":1,"minScore":50,"maxActive":3},
@@ -173,6 +179,16 @@ def init_db():
         CREATE TABLE IF NOT EXISTS otp_challenges(phone TEXT NOT NULL,purpose TEXT NOT NULL,code_hash TEXT NOT NULL,pending_json TEXT,created_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,resend_at INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(phone,purpose));
         CREATE TABLE IF NOT EXISTS otp_tickets(ticket TEXT PRIMARY KEY,phone TEXT NOT NULL,expires_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS beta_inquiries(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,national_code TEXT NOT NULL,consent INTEGER NOT NULL,created_at TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS preview_records(
+            resource TEXT NOT NULL,id TEXT NOT NULL,data_json TEXT NOT NULL,
+            created_at TEXT NOT NULL,updated_at TEXT NOT NULL,
+            PRIMARY KEY(resource,id));
+        CREATE INDEX IF NOT EXISTS ix_preview_records_resource_updated
+            ON preview_records(resource,updated_at DESC);
+        CREATE TABLE IF NOT EXISTS preview_audit(
+            id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor_id TEXT NOT NULL,
+            action TEXT NOT NULL, entity TEXT NOT NULL, entity_id TEXT NOT NULL,
+            detail_json TEXT NOT NULL, prev_hash TEXT NOT NULL, entry_hash TEXT NOT NULL);
         """)
         if not c.execute("SELECT 1 FROM tenants LIMIT 1").fetchone():
             c.execute("INSERT INTO tenants VALUES(?,?,?,?,?,?)",("default","localhost","دیجی‌بایل پی","#3b1f6b","#f5a400","د"))
@@ -181,10 +197,12 @@ def init_db():
         seed_products(c)
 
 def product_json(row):
+    conditions = json.loads(row["conditions_json"])
     return {"id":row["id"],"code":row["slug"],"slug":row["slug"],"name":row["name"],"title":row["name"],
             "description":row["description"],"badge":row["badge"],"minAmount":row["min_amount"],
             "maxAmount":row["max_amount"],"intervalDays":row["interval_days"],"tiers":json.loads(row["tiers_json"]),
-            "conditions":json.loads(row["conditions_json"]),"documents":json.loads(row["documents_json"]),
+            "conditions":conditions,"kind":conditions.get("kind",""),"steps":conditions.get("steps",[]),
+            "documents":json.loads(row["documents_json"]),
             "isActive":bool(row["is_active"]),"sortOrder":row["sort_order"]}
 
 def read_json(handler):
@@ -193,7 +211,7 @@ def read_json(handler):
     if length > 1_000_000: raise ApiError(413,"اندازه درخواست بیش از حد مجاز است.")
     try:
         value = json.loads(handler.rfile.read(length).decode("utf-8") if length else "{}")
-        if not isinstance(value,dict): raise ValueError()
+        if not isinstance(value,(dict,list)): raise ValueError()
         return value
     except (UnicodeDecodeError,json.JSONDecodeError,ValueError):
         raise ApiError(400,"بدنه درخواست باید JSON معتبر باشد.")
