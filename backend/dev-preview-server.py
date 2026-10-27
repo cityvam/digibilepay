@@ -346,8 +346,8 @@ def api_post(handler,path,body):
             tr=c.execute("SELECT * FROM otp_tickets WHERE ticket=?",(ticket,)).fetchone()
             if not tr or tr["expires_at"]<now(): raise ApiError(400,"تأیید موبایل منقضی شده است؛ دوباره کد بگیرید.")
             full_name=str(body.get("fullName") or "").strip(); phone=tr["phone"]
-            password=str(body.get("password") or ""); nid=normalize_digits(body.get("nationalCode") or "").strip() or None
-            if len(password)<8: raise ApiError(400,"رمز عبور حداقل ۸ نویسه باشد.")
+            password=normalize_digits(body.get("password") or ""); nid=normalize_digits(body.get("nationalCode") or "").strip() or None
+            if not re.fullmatch(r"[0-9]{8,}",password): raise ApiError(400,"رمز ثابت باید حداقل ۸ رقم عددی باشد.")
             if nid and not re.fullmatch(r"\d{10}",nid): raise ApiError(400,"کد ملی باید ۱۰ رقم باشد.")
             user=add_user(c,full_name,phone,password_hash(password),"Customer",str(body.get("email") or "").strip() or None,nid)
             c.execute("DELETE FROM otp_tickets WHERE ticket=?",(ticket,))
@@ -360,9 +360,9 @@ def api_post(handler,path,body):
             if user is None or not user["is_active"] or not password_ok(str(body.get("password") or ""),user["password_hash"]): raise ApiError(401,"نام کاربری یا رمز عبور نادرست است.")
         token=issue_token(user); return 200,{"data":{"accessToken":token,"token":token,"user":safe_user(user)}}
     if p=="/api/v1/auth/register":
-        phone=normalize_phone(body.get("phoneNumber") or body.get("phone")); password=str(body.get("password") or "")
+        phone=normalize_phone(body.get("phoneNumber") or body.get("phone")); password=normalize_digits(body.get("password") or "")
         if not phone: raise ApiError(400,"شماره موبایل معتبر نیست.")
-        if len(password)<8: raise ApiError(400,"رمز عبور حداقل ۸ نویسه باشد.")
+        if not re.fullmatch(r"[0-9]{8,}",password): raise ApiError(400,"رمز ثابت باید حداقل ۸ رقم عددی باشد.")
         with connect_db() as c:
             if c.execute("SELECT 1 FROM app_users WHERE phone=?",(phone,)).fetchone(): raise ApiError(409,"این شماره قبلاً ثبت شده است.")
         pending=dict(body); pending["password_hash"]=password_hash(password); pending.pop("password",None)
@@ -447,9 +447,9 @@ def create_user_cli():
     if not role: print("نقش نامعتبر است."); return 2
     name=input("نام و نام خانوادگی: ").strip(); phone=normalize_phone(input("شماره موبایل (09...): "))
     email=input("ایمیل (اختیاری): ").strip() or None
-    password=getpass("رمز اولیه (حداقل ۱۲ نویسه): "); confirm=getpass("تکرار رمز: ")
-    if not name or not phone or len(password)<12 or password!=confirm:
-        print("نام/شماره/رمز معتبر نیست یا دو رمز یکسان نیستند؛ حساب ساخته نشد."); return 2
+    password=normalize_digits(getpass("رمز اولیه (حداقل ۸ رقم عددی): ")); confirm=normalize_digits(getpass("تکرار رمز: "))
+    if not name or not phone or not re.fullmatch(r"[0-9]{8,}",password) or password!=confirm:
+        print("نام/شماره/رمز معتبر نیست؛ رمز باید حداقل ۸ رقم عددی و دو رمز یکسان باشند. حساب ساخته نشد."); return 2
     try:
         with connect_db() as c: add_user(c,name,phone,password_hash(password),role,email)
         print("حساب توسعه‌ای با نقش {} ساخته شد (شماره با ••{} تمام می‌شود).".format(role,phone[-4:]))
