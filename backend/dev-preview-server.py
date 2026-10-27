@@ -358,7 +358,7 @@ def delete_record(resource, ident, actor_id="preview-system"):
 
 def public_record(item):
     if item is None: return None
-    return {k:v for k,v in item.items() if k not in ("fileData","contentBase64")}
+    return {k:v for k,v in item.items() if k not in ("fileData","contentBase64","snapshot")}
 
 def user_can_read(user, item):
     owner=str(item.get("userId") or item.get("user_id") or "")
@@ -434,7 +434,7 @@ def preview_admin_get(handler, path, query):
     if match:
         item=record_get("backups",match.group(1))
         if not item: raise ApiError(404,"نسخه پشتیبان پیدا نشد.")
-        return json.dumps(item.get("snapshot",{}),ensure_ascii=False,indent=2).encode("utf-8")
+        return (json.dumps(item.get("snapshot",{}),ensure_ascii=False,indent=2).encode("utf-8"),"application/json; charset=utf-8")
     match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)(?:/([^/]+))?",path,re.I)
     if match:
         resource=match.group(1).lower()
@@ -569,6 +569,13 @@ def preview_admin_post(handler, path, body):
             item.setdefault("number","DP-"+secrets.token_hex(5).upper()); item.setdefault("status","Draft")
         elif resource=="virtual-cards":
             item.setdefault("status","Active"); item.setdefault("limit",0); item.setdefault("perTxnLimit",item.get("limit",0))
+        elif resource=="ledger/entries":
+            lines=item.get("lines",[]) or []
+            debit=sum(int(x.get("debit") or 0) for x in lines); credit=sum(int(x.get("credit") or 0) for x in lines)
+            if len(lines)<2 or debit!=credit or debit<=0 or credit<=0:
+                raise ApiError(400,"سند حسابداری باید دست‌کم دو سطر و جمع بدهکار و بستانکار برابر داشته باشد.")
+            item.setdefault("number","JE-"+datetime.now(timezone.utc).strftime("%Y%m%d")+"-"+secrets.token_hex(2).upper())
+            item.setdefault("status","Posted"); item.setdefault("createdAt",iso_now())
         return {"data":public_record(save_record(resource,item,actor_id=user["id"],action="create"))}
     raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
 
@@ -894,8 +901,9 @@ def api_delete(handler,path):
             raise ApiError(404,"مدرک پیدا نشد.")
         delete_record("documents",ident,user["id"])
         return 200,{"ok":True}
-    if re.fullmatch(r"/api/v1/admin/loan-products/[^/]+/image",path,re.I):
-        require_admin(handler)
+    if re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/image",path,re.I):
+        user=require_admin(handler); ident=path.split("/")[-2]
+        if record_get("product-images",ident): delete_record("product-images",ident,user["id"])
         return 200,{"ok":True,"url":""}
     return 200,preview_admin_delete(handler,path)
 
