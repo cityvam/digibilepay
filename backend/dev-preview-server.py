@@ -420,6 +420,11 @@ def preview_admin_get(handler, path, query):
         item=record_get("product-images",match.group(1))
         if not item or not item.get("fileData"): raise ApiError(404,"تصویر طرح موجود نیست.")
         return (base64.b64decode(item["fileData"]),str(item.get("contentType") or "application/octet-stream"))
+    match=re.fullmatch(r"/api/v1/admin/contract-templates/([^/]+)/sample",path,re.I)
+    if match:
+        item=record_get("contract-templates",match.group(1))
+        if not item or not item.get("sampleData"): raise ApiError(404,"فایل نمونه در دسترس نیست.")
+        return (base64.b64decode(item["sampleData"]),str(item.get("sampleContentType") or "application/octet-stream"))
     match=re.fullmatch(r"/api/v1/admin/contracts/([^/]+)/html",path,re.I)
     if match:
         item=record_get("contracts",match.group(1))
@@ -458,7 +463,8 @@ def preview_admin_post(handler, path, body):
         upload=body.get("file") if isinstance(body.get("file"),dict) else {}
         if not upload.get("filename"): raise ApiError(400,"فایل نمونه انتخاب نشده است.")
         return {"data":public_record(save_record("contract-templates",{"sampleFileName":upload["filename"],
-          "sampleFileSize":int(upload.get("size") or 0)},match.group(1),user["id"],"upload-sample"))}
+          "sampleFileSize":int(upload.get("size") or 0),"sampleContentType":upload.get("contentType","application/octet-stream"),
+          "sampleData":upload.get("contentBase64","")},match.group(1),user["id"],"upload-sample"))}
     match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/image",path,re.I)
     if match:
         upload=body.get("file") if isinstance(body.get("file"),dict) else {}
@@ -487,6 +493,27 @@ def preview_admin_post(handler, path, body):
           "status":"Posted","createdAt":iso_now()},actor_id=user["id"],action="reverse")
         save_record("ledger/entries",{"reversedBy":reverse["id"]},original["id"],user["id"],"mark-reversed")
         return {"data":public_record(reverse)}
+    match=re.fullmatch(r"/api/v1/admin/contract-templates/([^/]+)/(approve|publish|archive|preview|new-version|validate)",path,re.I)
+    if match:
+        ident,action=match.group(1),match.group(2).lower()
+        template=record_get("contract-templates",ident)
+        if not template: raise ApiError(404,"قالب قرارداد پیدا نشد.")
+        html=str(template.get("bodyHtml") or template.get("html") or "<h1>"+str(template.get("title") or "قالب قرارداد")+"</h1><p>متن نمونه در محیط توسعه</p>")
+        if action=="preview":
+            return {"id":ident,"html":html,"errors":[],"problems":[]}
+        if action=="validate":
+            problems=[]
+            if not str(template.get("title") or "").strip(): problems.append("عنوان قالب خالی است.")
+            if not html.strip(): problems.append("متن قالب خالی است.")
+            return {"id":ident,"problems":problems,"errors":problems}
+        if action=="new-version":
+            new_id=str(uuid.uuid4())
+            version=int(template.get("version") or 1)+1
+            cloned=dict(template); cloned.update({"id":new_id,"version":version,"status":"Draft","createdAt":iso_now()})
+            cloned.pop("updatedAt",None)
+            return {"data":public_record(save_record("contract-templates",cloned,new_id,user["id"],"new-version"))}
+        status={"approve":"Approved","publish":"Published","archive":"Archived"}[action]
+        return {"data":public_record(save_record("contract-templates",{"status":status},ident,user["id"],action))}
     if p=="/api/v1/admin/contract-variables/sync-defaults":
         defaults=[
           {"key":"user.fullName","label":"نام و نام خانوادگی","dataType":"String","source":"User","path":"fullName","required":True,"format":"","sensitivity":"Normal","defaultValue":"","validation":""},
@@ -882,6 +909,13 @@ def api_put(handler,path,body):
         if not isinstance(fields,dict): raise ApiError(400,"فیلدهای مدرک معتبر نیستند.")
         updated=save_record("documents",{"fields":fields},ident,user["id"],"edit-fields")
         return 200,{"data":public_record(updated)}
+    if re.fullmatch(r"/api/v1/admin/documents/([^/]+)/review",path,re.I):
+        match=re.fullmatch(r"/api/v1/admin/documents/([^/]+)/review",path,re.I)
+        user=require_admin(handler); ident=match.group(1)
+        item=record_get("documents",ident)
+        if not item: raise ApiError(404,"مدرک پیدا نشد.")
+        return 200,{"data":public_record(save_record("documents",{"status":body.get("status","Reviewed"),
+          "reviewNote":str(body.get("note") or ""),"ocrText":str(body.get("ocrText") or "")},ident,user["id"],"review"))}
     if p=="/api/v1/admin/app-settings" or re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)/[^/]+",path,re.I) or re.fullmatch(r"/api/v1/admin/virtual-cards/[^/]+/limit",path,re.I) or re.fullmatch(r"/api/v1/admin/loan-products/[^/]+/contracts",path,re.I):
         return 200,preview_admin_put(handler,path,body)
     raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
