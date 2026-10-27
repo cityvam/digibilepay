@@ -796,7 +796,8 @@ def save_product(body,product_id=None):
         exists=c.execute("SELECT id FROM loan_products WHERE id=?",(product_id,)).fetchone()
         values=(name,slug,description,badge,min_amount,max_amount,interval,tiers_json,cond_json,docs_json,active)
         if exists:
-            c.execute("UPDATE loan_products SET name=?,slug=?,description=?,badge=?,min_amount=?,max_amount=?,interval_days=?,tiers_json=?,conditions_json=?,documents_json=?,is_active=? WHERE id=?",values+(product_id,))
+            c.execute("UPDATE loan_products SET name=?,slug=?,description=?,badge=?,min_amount=?,max_amount=?,interval_days=?,tiers_json=?,conditions_json=?,documents_json=?,is_active=?,sort_order=? WHERE id=?",
+                      values+(int(body.get("sortOrder") or 0),product_id))
         else:
             c.execute("""INSERT INTO loan_products(id,name,slug,description,badge,min_amount,max_amount,interval_days,tiers_json,conditions_json,documents_json,is_active,sort_order,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (product_id,name,slug,description,badge,min_amount,max_amount,interval,tiers_json,cond_json,docs_json,active,int(body.get("sortOrder") or 100),iso_now()))
