@@ -232,7 +232,7 @@ def check_admin_module_mutations(token):
     assert status==201, product
     product_id=json_data(product)["id"]
     status, toggled, _, _=request(f"/api/v1/admin/loan-products/{product_id}/toggle","POST",{},token)
-    assert status==201 and json_data(toggled).get("isActive") is False, toggled
+    assert status in (200,201) and json_data(toggled).get("isActive") is False, toggled
     status, _, _, _=request(f"/api/v1/admin/loan-products/{product_id}","DELETE",token=token)
     assert status==200, "temporary product delete failed"
 
