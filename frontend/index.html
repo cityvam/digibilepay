@@ -296,16 +296,16 @@ function openAuth(mode,msg){if(!CFG.mock){location.href=mode==='login'?'/login.h
  ${mode==='reg'?`<div class="fld"><label for="fn">نام و نام خانوادگی</label><input id="fn" autocomplete="name"><div class="h"></div></div>`:''}
  <div class="fld"><label for="fm">شماره موبایل</label><input id="fm" inputmode="numeric" maxlength="11" placeholder="۰۹۱۲۳۴۵۶۷۸۹" autocomplete="tel"><div class="h"></div></div>
  ${mode==='reg'?`<div class="fld"><label for="fi">کد ملی</label><input id="fi" inputmode="numeric" maxlength="10"><div class="h"></div></div>`:''}
- <div class="fld"><label for="fp">رمز عبور</label><input id="fp" type="password" autocomplete="${mode==='login'?'current-password':'new-password'}"><div class="h"></div></div>
+ <div class="fld"><label for="fp">رمز ثابت (حداقل ۸ رقم عددی)</label><input id="fp" type="password" inputmode="numeric" minlength="8" autocomplete="${mode==='login'?'current-password':'new-password'}"><div class="h"></div></div>
  ${mode==='reg'?`<div class="fld"><label for="fr">کد معرف (اختیاری)</label><input id="fr" value="${esc(REF)}" style="direction:ltr;text-align:left"><div class="h"></div></div><label class="chk"><input type="checkbox" id="fc"> قوانین و حریم خصوصی را می‌پذیرم و با استعلام اعتبار موافقم.</label>`:''}
  <button class="btn solid lg" style="width:100%;margin-top:16px" type="submit">${mode==='login'?'ورود':'ادامه و دریافت کد تأیید'}</button></form>`);
  $('#tL').onclick=()=>openAuth('login');$('#tR').onclick=()=>openAuth('reg');
  const f=$('#af');
  f.fm.oninput=()=>{const v=f.fm.value;hint(f.fm,v&&!okMobile(v)?'شماره باید ۱۱ رقم و با ۰۹ شروع شود':'',0)};
  if(f.fi)f.fi.oninput=()=>{const v=f.fi.value;hint(f.fi,v.length===10?(okNid(v)?'کد ملی معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
- if(f.fp&&mode==='reg')f.fp.oninput=()=>{const v=f.fp.value;hint(f.fp,v?(v.length<8?'حداقل ۸ نویسه':'رمز مناسب است'):'',v.length>=8)};
+ if(f.fp)f.fp.oninput=()=>{const v=toEn(f.fp.value),valid=/^[0-9]{8,}$/.test(v);hint(f.fp,v?(valid?'رمز مناسب است':'رمز باید حداقل ۸ رقم عددی باشد'):'',valid)};
  f.onsubmit=async e=>{e.preventDefault();let bad=false;const need=(el,c,m)=>{if(!c){hint(el,m,0);bad=true}};
-  need(f.fm,okMobile(f.fm.value),'شماره موبایل معتبر نیست');need(f.fp,f.fp.value.length>=(mode==='reg'?8:1),mode==='reg'?'حداقل ۸ نویسه':'رمز را وارد کنید');
+  need(f.fm,okMobile(f.fm.value),'شماره موبایل معتبر نیست');need(f.fp,/^[0-9]{8,}$/.test(toEn(f.fp.value)),'رمز ثابت باید حداقل ۸ رقم عددی باشد');
   if(mode==='reg'){need(f.fn,f.fn.value.trim().split(' ').length>=2,'نام و نام خانوادگی را کامل بنویسید');need(f.fi,okNid(f.fi.value),'کد ملی معتبر نیست');if(!f.fc.checked){toast('برای ادامه، قوانین را بپذیرید');bad=true}}
   if(bad)return;
   const body={phoneNumber:toEn(f.fm.value),password:f.fp.value};
