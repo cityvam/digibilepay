@@ -273,6 +273,305 @@ def create_ticket(phone):
     with connect_db() as c: c.execute("INSERT INTO otp_tickets VALUES(?,?,?)",(ticket,phone,now()+TICKET_TTL))
     return ticket
 
+def read_multipart(handler):
+    try: length = int(handler.headers.get("Content-Length","0"))
+    except ValueError: raise ApiError(400,"طول درخواست معتبر نیست.")
+    if length > 7_000_000: raise ApiError(413,"اندازه فایل بیش از حد مجاز است.")
+    content_type = handler.headers.get("Content-Type","")
+    match = re.search(r'boundary=(?:"([^"]+)"|([^;]+))',content_type,re.I)
+    if not match: raise ApiError(400,"فرمت بارگذاری فایل معتبر نیست.")
+    boundary = (match.group(1) or match.group(2)).strip().encode()
+    raw = handler.rfile.read(length) if length else b""
+    result = {}
+    for part in raw.split(b"--"+boundary):
+        part = part.strip(b"\r\n-")
+        if not part or b"\r\n\r\n" not in part: continue
+        head, data = part.split(b"\r\n\r\n",1)
+        disp = re.search(br'content-disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]*)")?',head,re.I)
+        if not disp: continue
+        name = disp.group(1).decode("utf-8","replace")
+        filename = disp.group(2).decode("utf-8","replace") if disp.group(2) is not None else None
+        data = data.rstrip(b"\r\n")
+        if filename is None:
+            result[name] = data.decode("utf-8","replace")
+        else:
+            if len(data) > 6_000_000: raise ApiError(413,"حجم هر فایل حداکثر ۶ مگابایت است.")
+            ct = re.search(br'content-type:\s*([^\r\n]+)',head,re.I)
+            media = ct.group(1).decode("ascii","replace").strip() if ct else "application/octet-stream"
+            result[name] = {"filename":Path(filename).name[:180],"contentType":media,
+                            "size":len(data),"contentBase64":base64.b64encode(data).decode("ascii")}
+    return result
+
+def read_request_body(handler):
+    if handler.headers.get("Content-Type","").lower().startswith("multipart/form-data"):
+        return read_multipart(handler)
+    return read_json(handler)
+
+def record_list(resource):
+    with connect_db() as c:
+        rows=c.execute("SELECT data_json FROM preview_records WHERE resource=? ORDER BY updated_at DESC,id",(resource,)).fetchall()
+    result=[]
+    for row in rows:
+        try: result.append(json.loads(row["data_json"]))
+        except json.JSONDecodeError: continue
+    return result
+
+def record_get(resource, ident):
+    with connect_db() as c:
+        row=c.execute("SELECT data_json FROM preview_records WHERE resource=? AND id=?",(resource,str(ident))).fetchone()
+    if not row: return None
+    try: return json.loads(row["data_json"])
+    except json.JSONDecodeError: return None
+
+def audit_preview(actor_id, action, entity, entity_id="", detail=None):
+    event={"at":iso_now(),"actorId":str(actor_id or "preview-system"),"action":str(action),
+           "entity":str(entity),"entityId":str(entity_id),"detail":detail or {}}
+    encoded=json.dumps(event,ensure_ascii=False,sort_keys=True,separators=(",",":"))
+    with connect_db() as c:
+        prev=c.execute("SELECT entry_hash FROM preview_audit ORDER BY id DESC LIMIT 1").fetchone()
+        prev_hash=prev["entry_hash"] if prev else "0"*64
+        entry_hash=hashlib.sha256((prev_hash+encoded).encode("utf-8")).hexdigest()
+        c.execute("""INSERT INTO preview_audit(at,actor_id,action,entity,entity_id,detail_json,prev_hash,entry_hash)
+          VALUES(?,?,?,?,?,?,?,?)""",(event["at"],event["actorId"],event["action"],event["entity"],
+          event["entityId"],json.dumps(event["detail"],ensure_ascii=False),prev_hash,entry_hash))
+
+def save_record(resource, body, ident=None, actor_id="preview-system", action="save"):
+    if not isinstance(body,dict): raise ApiError(400,"بدنه باید یک شیء JSON باشد.")
+    record_id=str(ident or body.get("id") or uuid.uuid4())
+    current=record_get(resource,record_id) or {}
+    data=dict(current); data.update(body); data["id"]=record_id
+    data.setdefault("createdAt",iso_now()); data["updatedAt"]=iso_now()
+    encoded=json.dumps(data,ensure_ascii=False,separators=(",",":"))
+    with connect_db() as c:
+        c.execute("""INSERT INTO preview_records(resource,id,data_json,created_at,updated_at) VALUES(?,?,?,?,?)
+          ON CONFLICT(resource,id) DO UPDATE SET data_json=excluded.data_json,updated_at=excluded.updated_at""",
+          (resource,record_id,encoded,data["createdAt"],data["updatedAt"]))
+    audit_preview(actor_id,action,resource,record_id,{"keys":sorted(k for k in body if k not in ("fileData","contentBase64"))})
+    return data
+
+def delete_record(resource, ident, actor_id="preview-system"):
+    existed=record_get(resource,ident)
+    if existed is None: raise ApiError(404,"رکورد پیدا نشد.")
+    with connect_db() as c: c.execute("DELETE FROM preview_records WHERE resource=? AND id=?",(resource,str(ident)))
+    audit_preview(actor_id,"delete",resource,ident,{})
+    return True
+
+def public_record(item):
+    if item is None: return None
+    return {k:v for k,v in item.items() if k not in ("fileData","contentBase64")}
+
+def user_can_read(user, item):
+    owner=str(item.get("userId") or item.get("user_id") or "")
+    return not owner or owner in (str(user["id"]),str(user["phone"]))
+
+def preview_admin_get(handler, path, query):
+    user=require_admin(handler)
+    p=path.lower()
+    if p=="/api/v1/admin/app-settings":
+        with connect_db() as c: rows=c.execute("SELECT key,value FROM app_settings WHERE key!='jwt_secret' ORDER BY key").fetchall()
+        return {r["key"]:r["value"] for r in rows}
+    if p=="/api/v1/admin/audit/verify":
+        with connect_db() as c: rows=c.execute("SELECT * FROM preview_audit ORDER BY id").fetchall()
+        previous="0"*64
+        for row in rows:
+            event={"at":row["at"],"actorId":row["actor_id"],"action":row["action"],"entity":row["entity"],
+                   "entityId":row["entity_id"],"detail":json.loads(row["detail_json"] or "{}")}
+            encoded=json.dumps(event,ensure_ascii=False,sort_keys=True,separators=(",",":"))
+            expected=hashlib.sha256((previous+encoded).encode("utf-8")).hexdigest()
+            if row["prev_hash"]!=previous or row["entry_hash"]!=expected:
+                return {"ok":False,"checkedCount":row["id"]-1,"brokenAt":row["id"]}
+            previous=row["entry_hash"]
+        return {"ok":True,"checkedCount":len(rows)}
+    if p=="/api/v1/admin/audit":
+        take=max(1,min(500,int((query.get("take") or ["200"])[0] or 200)))
+        with connect_db() as c: rows=c.execute("SELECT * FROM preview_audit ORDER BY id DESC LIMIT ?",(take,)).fetchall()
+        return {"data":[{"id":r["id"],"at":r["at"],"actorId":r["actor_id"],"action":r["action"],
+                "entity":r["entity"],"entityId":r["entity_id"],"detail":json.loads(r["detail_json"] or "{}"),
+                "hash":r["entry_hash"]} for r in rows]}
+    if p=="/api/v1/admin/ledger/trial-balance":
+        accounts=record_list("ledger-accounts")
+        entries=record_list("ledger-entries")
+        balances=[]
+        for account in accounts:
+            debit=credit=0
+            for entry in entries:
+                for line in entry.get("lines",[]) or []:
+                    if str(line.get("accountId"))==str(account.get("id")) or str(line.get("accountId"))==str(account.get("code")):
+                        debit+=int(line.get("debit") or 0); credit+=int(line.get("credit") or 0)
+            balances.append({"accountId":account.get("id"),"code":account.get("code"),"name":account.get("name"),
+                             "debit":debit,"credit":credit,"balance":debit-credit})
+        return {"data":balances}
+    if p=="/api/v1/admin/loan-products/labels":
+        with connect_db() as c: rows=c.execute("SELECT id,name,slug FROM loan_products ORDER BY sort_order,name").fetchall()
+        return {"data":[{"id":r["id"],"value":r["id"],"name":r["name"],"label":r["name"],"slug":r["slug"]} for r in rows]}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/contracts",path,re.I)
+    if match:
+        item=record_get("loan-product-contracts",match.group(1))
+        return {"data":(item or {}).get("rows",[])}
+    match=re.fullmatch(r"/api/v1/admin/virtual-cards/([^/]+)/transactions",path,re.I)
+    if match: return {"data":record_list("card-transactions:"+match.group(1))}
+    match=re.fullmatch(r"/api/v1/admin/contracts/([^/]+)/html",path,re.I)
+    if match:
+        item=record_get("contracts",match.group(1))
+        if not item: raise ApiError(404,"قرارداد پیدا نشد.")
+        return str(item.get("html") or ("<h1>"+str(item.get("title") or item.get("number") or "قرارداد")+"</h1><p>این متن فقط رکورد پیش‌نمایش است و نسخه قانونی امضاشده محسوب نمی‌شود.</p>"))
+    match=re.fullmatch(r"/api/v1/admin/contracts/([^/]+)/events",path,re.I)
+    if match:
+        item=record_get("contracts",match.group(1))
+        if not item: raise ApiError(404,"قرارداد پیدا نشد.")
+        return {"data":item.get("events",[])}
+    match=re.fullmatch(r"/api/v1/admin/backups/([^/]+)",path,re.I)
+    if match:
+        item=record_get("backups",match.group(1))
+        if not item: raise ApiError(404,"نسخه پشتیبان پیدا نشد.")
+        return json.dumps(item.get("snapshot",{}),ensure_ascii=False,indent=2).encode("utf-8")
+    match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)(?:/([^/]+))?",path,re.I)
+    if match:
+        resource=match.group(1).lower()
+        ident=match.group(2)
+        if ident:
+            item=record_get(resource,ident)
+            if not item: raise ApiError(404,"رکورد پیدا نشد.")
+            return {"data":public_record(item)}
+        if resource=="contract-templates" and not record_list(resource):
+            return {"data":[]}
+        return {"data":[public_record(x) for x in record_list(resource)]}
+    if p=="/api/v1/admin/backups":
+        return {"data":[public_record(x) for x in record_list("backups")]}
+    raise ApiError(501,"این مسیر در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
+
+def preview_admin_post(handler, path, body):
+    user=require_admin(handler)
+    p=path.lower()
+    if p=="/api/v1/admin/contract-variables/sync-defaults":
+        defaults=[
+          {"key":"user.fullName","label":"نام و نام خانوادگی","dataType":"String","source":"User","path":"fullName","required":True,"format":"","sensitivity":"Normal","defaultValue":"","validation":""},
+          {"key":"user.nationalCode","label":"کد ملی","dataType":"String","source":"User","path":"nationalCode","required":True,"format":"","sensitivity":"Sensitive","defaultValue":"","validation":"10 digits"},
+          {"key":"loan.amount","label":"مبلغ تسهیلات","dataType":"Money","source":"Loan","path":"amount","required":True,"format":"N0","sensitivity":"Normal","defaultValue":"","validation":">= 0"},
+          {"key":"loan.months","label":"تعداد اقساط","dataType":"Integer","source":"Loan","path":"months","required":True,"format":"","sensitivity":"Normal","defaultValue":"","validation":"> 0"}]
+        added=0; existing={x.get("key") for x in record_list("contract-variables")}
+        for d in defaults:
+            if d["key"] not in existing: save_record("contract-variables",d,actor_id=user["id"],action="seed-default")
+            added+=int(d["key"] not in existing)
+        return {"added":added}
+    if p=="/api/v1/admin/contracts/generate":
+        body=dict(body); contract_id=str(uuid.uuid4())
+        contract={"id":contract_id,"number":"DP-"+now().__str__()+"-"+contract_id[:6].upper(),
+          "title":"قرارداد پیش‌نمایش "+str(body.get("productId") or ""),
+          "userId":str(body.get("userId") or ""),"productId":str(body.get("productId") or ""),
+          "amount":int(body.get("amount") or 0),"months":int(body.get("months") or 0),
+          "stage":body.get("stage") or "Draft","status":"Draft" if body.get("dry") else "Presented",
+          "html":"<h1>قرارداد نمونه پیش‌نمایش</h1><p>این متن برای آزمایش رابط کاربری است و قرارداد حقوقی معتبر نیست.</p>",
+          "events":[{"at":iso_now(),"action":"generate","note":"ایجاد در پیش‌نمایش"}]}
+        if not body.get("dry"): save_record("contracts",contract,actor_id=user["id"],action="generate")
+        return {"data":contract}
+    if p=="/api/v1/admin/virtual-cards/issue":
+        card={"id":str(uuid.uuid4()),"code":"DP-"+secrets.token_hex(4).upper(),
+              "last4":secrets.token_hex(2).upper(),"holderName":str(body.get("holderName") or ""),
+              "userId":str(body.get("userId") or ""),"loanId":str(body.get("loanId") or ""),
+              "limit":int(body.get("limit") or 0),"perTxnLimit":int(body.get("limit") or 0),
+              "status":"Active","createdAt":iso_now(),"transactions":[]}
+        card=save_record("virtual-cards",card,actor_id=user["id"],action="issue")
+        return {"data":public_record(card)}
+    match=re.fullmatch(r"/api/v1/admin/virtual-cards/([^/]+)/(activate|freeze|cancel|block|unblock)",path,re.I)
+    if match:
+        card=record_get("virtual-cards",match.group(1))
+        if not card: raise ApiError(404,"کارت پیدا نشد.")
+        status={"activate":"Active","freeze":"Frozen","cancel":"Cancelled","block":"Blocked","unblock":"Active"}[match.group(2).lower()]
+        return {"data":public_record(save_record("virtual-cards",{"status":status},match.group(1),user["id"],"status-change"))}
+    match=re.fullmatch(r"/api/v1/admin/documents/([^/]+)/review",path,re.I)
+    if match:
+        return {"data":public_record(save_record("documents",{"status":body.get("status","Reviewed"),
+              "reviewNote":str(body.get("note") or ""),"ocrText":str(body.get("ocrText") or "")},
+              match.group(1),user["id"],"review"))}
+    match=re.fullmatch(r"/api/v1/admin/payment-declarations/([^/]+)/review",path,re.I)
+    if match:
+        return {"data":public_record(save_record("payment-declarations",{"status":body.get("status","Reviewed"),
+              "note":str(body.get("note") or "")},match.group(1),user["id"],"review"))}
+    match=re.fullmatch(r"/api/v1/admin/inquiries/([^/]+)/result",path,re.I)
+    if match:
+        return {"data":public_record(save_record("inquiries",{"status":body.get("status","Done"),
+              "result":str(body.get("result") or "")},match.group(1),user["id"],"result"))}
+    match=re.fullmatch(r"/api/v1/admin/orders/([^/]+)/status",path,re.I)
+    if match: return {"data":public_record(save_record("orders",{"status":body.get("status","Updated")},match.group(1),user["id"],"status-change"))}
+    match=re.fullmatch(r"/api/v1/admin/tenants/([^/]+)/domains",path,re.I)
+    if match:
+        tenant=record_get("tenants",match.group(1))
+        if not tenant: raise ApiError(404,"مستأجر پیدا نشد.")
+        domain={"id":str(uuid.uuid4()),"host":str(body.get("host") or "").strip().lower(),"isPrimary":bool(body.get("isPrimary"))}
+        if not re.fullmatch(r"[a-z0-9.-]{3,253}",domain["host"]): raise ApiError(400,"دامنه معتبر نیست.")
+        domains=tenant.get("domains",[]); domains.append(domain)
+        return {"data":public_record(save_record("tenants",{"domains":domains},match.group(1),user["id"],"add-domain"))}
+    match=re.fullmatch(r"/api/v1/admin/backups",path,re.I)
+    if match:
+        with connect_db() as c:
+            users=int(c.execute("SELECT COUNT(*) FROM app_users").fetchone()[0])
+            products=[product_json(x) for x in c.execute("SELECT * FROM loan_products ORDER BY sort_order,name").fetchall()]
+        snapshot={"createdAt":iso_now(),"previewOnly":True,"userCount":users,"loanProducts":products,
+                  "resources":{name:record_list(name) for name in ("contract-templates","contract-variables","contracts","counterparties","documents","inquiries","ledger/accounts","ledger/entries","marketers","orders","payment-declarations","tenants","virtual-cards")}}
+        name="preview-backup-"+datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")+"-"+secrets.token_hex(3)+".json"
+        backup=save_record("backups",{"name":name,"createdAt":iso_now(),"size":len(json.dumps(snapshot,ensure_ascii=False)),"snapshot":snapshot},name,user["id"],"backup")
+        return {"name":name,"createdAt":backup["createdAt"]}
+    collection=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)",path,re.I)
+    if collection:
+        resource=collection.group(1).lower()
+        item=dict(body)
+        if resource=="orders":
+            item.setdefault("code","ORD-"+secrets.token_hex(4).upper()); item.setdefault("status","Pending"); item.setdefault("createdAt",iso_now())
+        elif resource=="inquiries": item.setdefault("status","Pending"); item.setdefault("createdAt",iso_now())
+        elif resource=="payment-declarations": item.setdefault("status","Pending"); item.setdefault("createdAt",iso_now())
+        elif resource=="documents": item.setdefault("status","Pending"); item.setdefault("createdOn",iso_now())
+        elif resource=="contracts":
+            item.setdefault("number","DP-"+secrets.token_hex(5).upper()); item.setdefault("status","Draft")
+        elif resource=="virtual-cards":
+            item.setdefault("status","Active"); item.setdefault("limit",0); item.setdefault("perTxnLimit",item.get("limit",0))
+        return {"data":public_record(save_record(resource,item,actor_id=user["id"],action="create"))}
+    raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
+
+def preview_admin_put(handler, path, body):
+    user=require_admin(handler)
+    p=path.lower()
+    if p=="/api/v1/admin/app-settings":
+        if not isinstance(body,dict): raise ApiError(400,"تنظیمات باید به‌صورت شیء ارسال شوند.")
+        with connect_db() as c:
+            for key,value in body.items():
+                if key=="jwt_secret": continue
+                c.execute("INSERT INTO app_settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                          (str(key),str(value)))
+        audit_preview(user["id"],"update","app-settings","",{"keys":sorted(k for k in body if k!="jwt_secret")})
+        return {"ok":True}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/contracts",path,re.I)
+    if match:
+        if not isinstance(body,list): raise ApiError(400,"فهرست مراحل قرارداد معتبر نیست.")
+        saved=save_record("loan-product-contracts",{"rows":body},match.group(1),user["id"],"update")
+        return {"data":saved.get("rows",[])}
+    match=re.fullmatch(r"/api/v1/admin/virtual-cards/([^/]+)/limit",path,re.I)
+    if match:
+        card=record_get("virtual-cards",match.group(1))
+        if not card: raise ApiError(404,"کارت پیدا نشد.")
+        return {"data":public_record(save_record("virtual-cards",{"limit":int(body.get("limit") or 0),
+          "perTxnLimit":int(body.get("perTxnLimit") or 0)},match.group(1),user["id"],"limit-change"))}
+    match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)/([^/]+)",path,re.I)
+    if match:
+        return {"data":public_record(save_record(match.group(1).lower(),body,match.group(2),user["id"],"update"))}
+    raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
+
+def preview_admin_delete(handler, path):
+    user=require_admin(handler)
+    p=path.lower()
+    match=re.fullmatch(r"/api/v1/admin/tenants/([^/]+)/domains/([^/]+)",path,re.I)
+    if match:
+        tenant=record_get("tenants",match.group(1))
+        if not tenant: raise ApiError(404,"مستأجر پیدا نشد.")
+        domains=[x for x in tenant.get("domains",[]) if str(x.get("id"))!=match.group(2)]
+        save_record("tenants",{"domains":domains},match.group(1),user["id"],"delete-domain")
+        return {"ok":True}
+    match=re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)/([^/]+)",path,re.I)
+    if match:
+        delete_record(match.group(1).lower(),match.group(2),user["id"])
+        return {"ok":True}
+    raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
+
 def api_get(handler,path,query):
     p=path.lower()
     if p in ("/api/v1/health","/api/v1/health/live"):
