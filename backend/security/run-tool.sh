@@ -1,5 +1,5 @@
 #!/bin/bash
-# اجرای ابزار خط فرمان برنامه (--auth-doctor یا --create-superadmin) با همان تنظیمات و متغیرهای محیطی سرویس.
+# اجرای ابزار خط فرمان برنامه (--auth-doctor، --create-superadmin یا --create-role-user) با همان تنظیمات و متغیرهای محیطی سرویس.
 # استفاده: bash run-tool.sh --auth-doctor [نام_سرویس=ghestine]
 FLAG="${1:---auth-doctor}"; SVC="${2:-ghestine}"
 UNIT=$(systemctl cat "$SVC.service" 2>/dev/null) || { echo "سرویس $SVC پیدا نشد"; exit 1; }
