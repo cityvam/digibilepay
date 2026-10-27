@@ -10,7 +10,9 @@ on:
   push:
     branches: [main]
     paths:
-      - "backend/dev-preview-server.py"
+      - "backend/**"
+      - "frontend/**"
+      - "tests/**"
       - ".github/workflows/dev-preview-tests.yml"
 
 jobs:
@@ -55,8 +57,4 @@ jobs:
           assert len(products.get("data", [])) >= 3, products
           print("PASS: health, tenant config, and SQLite-backed loan products")
           PY
-      - name: Run frontend and API end-to-end smoke tests
-        shell: bash
-        run: |
-          export DIGIBILEPAY_DATA_DIR="$RUNNER_TEMP/digibilepay-test-data"
           python tests/check_preview.py
