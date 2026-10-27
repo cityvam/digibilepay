@@ -225,12 +225,46 @@ def check_admin_module_mutations(token):
     status, _, _, _=request(f"/api/v1/admin/tenants/{tenant_id}/domains/{domain_id}","DELETE",token=token)
     assert status==200, "tenant domain delete failed"
 
+    status, admin_products, _, _=request("/api/v1/admin/loan-products",token=token)
+    definitions=json_data(admin_products)
+    assert status==200 and definitions and all(isinstance(x.get("shape"),dict) for x in definitions), admin_products
+    p3=next((x for x in definitions if x.get("slug")=="p3"),None)
+    assert p3 and p3["shape"].get("tiers") and p3["shape"].get("conditions") is not None, p3
+
+    status, application, _, _=request("/api/v1/me/loan-applications","POST",
+        {"productId":"p3","amount":2000000,"months":3},token)
+    assert status==201, application
+    application_id=json_data(application)["id"]
+    status, mine, _, _=request("/api/v1/me/loan-applications",token=token)
+    assert status==200 and any(x.get("id")==application_id for x in json_data(mine)), mine
+    status, changed_app, _, _=request(f"/api/v1/admin/loan-applications/{application_id}/status","POST",
+        {"status":"UnderReview","note":"CI review"},token)
+    assert status==201 and json_data(changed_app).get("status")=="UnderReview", changed_app
+
     status, product, _, _=request("/api/v1/admin/loan-products","POST",
         {"name":"CI Temporary Plan","slug":"ci-temporary-plan","description":"CI only","minAmount":1000,
          "maxAmount":5000,"intervalDays":30,"tiers":[{"months":3,"feePercent":1,"downPaymentPercent":0}],
-         "conditions":{},"documents":[],"isActive":True},token)
+         "conditions":{},"documents":[],"isActive":True,"sortOrder":13,"interestMethod":"Monthly",
+         "interestPercent":4.5,"lateDailyCoef":0.0008,"earlyDailyCoef":0.0004,
+         "showInList":True,"sendReminders":False,"fullDescriptionHtml":"<p>CI details</p>","labels":["CI"],
+         "operationalCosts":[{"name":"CI Fee","amount":100}]},token)
     assert status==201, product
-    product_id=json_data(product)["id"]
+    product_json_value=json_data(product); product_id=product_json_value["id"]
+    shape=product_json_value.get("shape",{})
+    assert shape.get("interestPercent")==4.5 and shape.get("lateDailyCoef")==0.0008, shape
+    assert shape.get("sortOrder",13)==13 and shape.get("showInList") is True and shape.get("sendReminders") is False, shape
+    status, saved_product, _, _=request(f"/api/v1/admin/loan-products/{product_id}", "GET", token=token)
+    assert status==200 and json_data(saved_product).get("shape",{}).get("interestPercent")==4.5, saved_product
+    status, product_update, _, _=request(f"/api/v1/admin/loan-products/{product_id}","PUT",
+        {"name":"CI Temporary Plan Updated","slug":"ci-temporary-plan","description":"CI only","minAmount":1000,
+         "maxAmount":5000,"intervalDays":30,"tiers":[{"months":3,"feePercent":1,"downPaymentPercent":0}],
+         "conditions":{},"documents":[],"isActive":True,"sortOrder":17,"interestMethod":"Annual",
+         "interestPercent":5,"lateDailyCoef":0.0007,"earlyDailyCoef":0.0003,
+         "showInList":True,"sendReminders":False},token)
+    assert status==200 and json_data(product_update).get("shape",{}).get("interestMethod")=="Annual", product_update
+    status, verified_products, _, _=request("/api/v1/admin/loan-products",token=token)
+    verified=next((x for x in json_data(verified_products) if x.get("id")==product_id),None)
+    assert verified and verified.get("sortOrder")==17 and verified["shape"].get("interestPercent")==5, verified
     status, toggled, _, _=request(f"/api/v1/admin/loan-products/{product_id}/toggle","POST",{},token)
     assert status in (200,201) and json_data(toggled).get("isActive") is False, toggled
     status, _, _, _=request(f"/api/v1/admin/loan-products/{product_id}","DELETE",token=token)
