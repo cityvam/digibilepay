@@ -57,7 +57,7 @@ h1{font-size:1.2rem;margin:10px 0 2px}.sub{color:var(--muted);font-size:.88rem;m
 <script>
 const NQ=(()=>{const n=new URLSearchParams(location.search).get('next');return n&&/^\/[A-Za-z0-9._\-\/]*$/.test(n)&&!n.startsWith('//')?n:''})();
 const MOCK=false;
-const API={captcha:'/api/v1/security/captcha',otpReq:'/api/v1/security/otp/request',otpVer:'/api/v1/security/otp/verify',otpSt:'/api/v1/security/otp/status',login:'/api/v1/security/login',after:NQ||'/profile.html'};
+const API={captcha:'/api/v1/security/captcha',otpReq:'/api/v1/security/otp/request',otpVer:'/api/v1/security/otp/verify',otpSt:'/api/v1/security/otp/status',login:'/api/v1/security/login',after:NQ||'/'};
 const $=s=>document.querySelector(s),toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const fa=n=>Number(n).toLocaleString('fa-IR',{useGrouping:false});
 const okM=v=>/^09\d{9}$/.test(toEn(v));
@@ -97,7 +97,7 @@ function s2(on){$('#s1').hidden=on;$('#s2').hidden=!on}
 async function sendCode(){msg('');const m=toEn($('#om').value),c=toEn($('#co').value);let bad=false;
  if(!okM(m)){hint($('#om'),'شماره باید ۱۱ رقم و با ۰۹ شروع شود');bad=true}else hint($('#om'),'');if(c.length!==5){hint($('#co'),'کد امنیتی ۵ رقمی را وارد کنید');bad=true}else hint($('#co'),'');if(bad)return;
  $('#bS').disabled=true;$('#bR').disabled=true;try{const r=await call('POST',API.otpReq,{phone:m,captchaId:cap.O,captchaAnswer:c});
-  if(r.ok){phone=m;s2(true);$('#sent').textContent='کد ۶ رقمی به '+fa(m)+' ارسال شد.';runTimer(r.j.expiresIn,r.j.resendIn);document.querySelector('#otp input').focus();msg('')}
+  if(r.ok){phone=m;s2(true);$('#sent').textContent='در پیش‌نمایش Codespaces پیامک واقعی ارسال نمی‌شود؛ کد ۶ رقمی در ترمینال اجرای سرور چاپ می‌شود. شماره: '+fa(m);runTimer(r.j.expiresIn,r.j.resendIn);document.querySelector('#otp input').focus();msg('')}
   else{msg(r.j.message||'ارسال انجام نشد');if(r.status===429&&r.j.resendIn){phone=m;s2(true);runTimer(r.j.expiresIn,r.j.resendIn)}loadCap('O')}}catch(_){msg('اتصال برقرار نشد.')}$('#bS').disabled=false}
 $('#bR').onclick=()=>{s2(false);loadCap('O');msg('برای ارسال مجدد، کد امنیتی را دوباره وارد کنید.','ok')};
 $('#bB').onclick=()=>{clearInterval(tmr);s2(false);loadCap('O')};

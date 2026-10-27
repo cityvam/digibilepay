@@ -57,7 +57,7 @@ h1{font-size:1.2rem;margin:10px 0 2px}.sub{color:var(--muted);font-size:.88rem;m
 <script>
 const NQ=(()=>{const n=new URLSearchParams(location.search).get('next');return n&&/^\/[A-Za-z0-9._\-\/]*$/.test(n)&&!n.startsWith('//')?n:''})();
 const MOCK=false;
-const API={captcha:'/api/v1/security/captcha',otpReq:'/api/v1/security/otp/request',otpVer:'/api/v1/security/otp/verify',otpSt:'/api/v1/security/otp/status',register:'/api/v1/security/register',after:NQ||'/profile.html'};
+const API={captcha:'/api/v1/security/captcha',otpReq:'/api/v1/security/otp/request',otpVer:'/api/v1/security/otp/verify',otpSt:'/api/v1/security/otp/status',register:'/api/v1/security/register',after:NQ||'/'};
 const $=s=>document.querySelector(s),toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const fa=n=>Number(n).toLocaleString('fa-IR',{useGrouping:false}),okM=v=>/^09\d{9}$/.test(toEn(v));
 const okNid=v=>{v=toEn(v);if(!/^\d{10}$/.test(v)||/^(\d)\1{9}$/.test(v))return false;let s=0;for(let i=0;i<9;i++)s+=(+v[i])*(10-i);const r=s%11,c=+v[9];return r<2?c===r:c===11-r};
@@ -82,7 +82,7 @@ function runTimer(exp,res){clearInterval(tmr);const t0=performance.now();const t
 $('#f1').onsubmit=async e=>{e.preventDefault();msg('');const m=toEn($('#rm').value),c=toEn($('#c1').value);let bad=false;
  if(!okM(m)){hint($('#rm'),'شماره باید ۱۱ رقم و با ۰۹ شروع شود');bad=true}else hint($('#rm'),'');if(c.length!==5){hint($('#c1'),'کد امنیتی ۵ رقمی را وارد کنید');bad=true}else hint($('#c1'),'');if(bad)return;
  $('#b1').disabled=true;try{const r=await call('POST',API.otpReq,{phone:m,captchaId:capId['1'],captchaAnswer:c,purpose:'register'});
-  if(r.ok||(r.status===429&&r.j.resendIn)){phone=m;step(2);$('#sent').textContent='کد ۶ رقمی به '+fa(m)+' ارسال شد.';runTimer(r.j.expiresIn,r.j.resendIn);document.querySelector('#otp input').focus();if(!r.ok)msg(r.j.message)}else{msg(r.j.message||'ارسال انجام نشد');loadCap('1')}}catch(_){msg('اتصال برقرار نشد.')}$('#b1').disabled=false};
+  if(r.ok||(r.status===429&&r.j.resendIn)){phone=m;step(2);$('#sent').textContent='در پیش‌نمایش Codespaces پیامک واقعی ارسال نمی‌شود؛ کد ۶ رقمی در ترمینال اجرای سرور چاپ می‌شود. شماره: '+fa(m);runTimer(r.j.expiresIn,r.j.resendIn);document.querySelector('#otp input').focus();if(!r.ok)msg(r.j.message)}else{msg(r.j.message||'ارسال انجام نشد');loadCap('1')}}catch(_){msg('اتصال برقرار نشد.')}$('#b1').disabled=false};
 $('#bR').onclick=()=>{step(1);loadCap('1');msg('برای ارسال مجدد، کد امنیتی را دوباره وارد کنید.','ok')};$('#bB').onclick=()=>{clearInterval(tmr);step(1);loadCap('1')};
 $('#f2').onsubmit=async e=>{e.preventDefault();const code=[...document.querySelectorAll('#otp input')].map(i=>i.value).join('');if(code.length<6){msg('کد ۶ رقمی را کامل وارد کنید');return}
  $('#b2').disabled=true;try{const r=await call('POST',API.otpVer,{phone,code,purpose:'register'});if(r.ok){ticket=r.j.ticket;clearInterval(tmr);step(3)}else msg(r.j.message||'کد نادرست است')}catch(_){msg('اتصال برقرار نشد.')}$('#b2').disabled=false};
