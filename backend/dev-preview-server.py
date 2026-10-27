@@ -16,6 +16,8 @@ FRONTEND = ROOT / "frontend"
 DATA_DIR = Path(os.environ.get("DIGIBILEPAY_DATA_DIR", ROOT / "data")).resolve()
 DB_PATH = Path(os.environ.get("DIGIBILEPAY_DB_PATH", DATA_DIR / "digibilepay-preview.sqlite3")).resolve()
 OTP_TTL, CAPTCHA_TTL, TICKET_TTL = 120, 300, 900
+# Deliberately fixed only in this development-preview server; never use for production.
+DEV_FIXED_OTP = "123456"
 ROLES = ("SuperAdmin", "Admin", "Customer", "Merchant", "Agent")
 ROLE_CLAIM = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role"
 
@@ -220,7 +222,7 @@ def create_captcha():
     return {"id":cid,"image":"data:image/svg+xml;charset=utf-8,"+quote(svg,safe="")}
 
 def create_otp(phone,purpose,pending=None):
-    code, timestamp = str(secrets.randbelow(900000)+100000), now()
+    code, timestamp = DEV_FIXED_OTP, now()
     pending_json = json.dumps(pending,ensure_ascii=False) if pending else None
     with connect_db() as c:
         old = c.execute("SELECT resend_at FROM otp_challenges WHERE phone=? AND purpose=?",(phone,purpose)).fetchone()
@@ -237,7 +239,11 @@ def verify_otp(phone,purpose,code):
         row = c.execute("SELECT * FROM otp_challenges WHERE phone=? AND purpose=?",(phone,purpose)).fetchone()
         if not row or row["expires_at"] < now(): raise ApiError(400,"کد تأیید وجود ندارد یا منقضی شده است.")
         if row["attempts"] >= 5: raise ApiError(429,"تعداد تلاش مجاز تمام شده است.")
-        if not hmac.compare_digest(row["code_hash"],digest(normalize_digits(code).strip())):
+        # The development preview deliberately accepts the documented fixed test OTP.
+        # Keep all normal challenge checks above (matching phone/purpose, expiry, attempt limit).
+        supplied = normalize_digits(code).strip()
+        if not (hmac.compare_digest(row["code_hash"],digest(supplied))
+                or hmac.compare_digest(supplied,DEV_FIXED_OTP)):
             c.execute("UPDATE otp_challenges SET attempts=attempts+1 WHERE phone=? AND purpose=?",(phone,purpose))
             invalid = True
     # Raise after the transaction commits so a failed attempt is counted.
@@ -508,7 +514,7 @@ def main():
     print("============================================================")
     print("DigitalPay Codespaces DEVELOPMENT PREVIEW")
     print("SQLite database: "+str(DB_PATH))
-    print("OTP codes are printed to this terminal; no SMS is sent.")
+    print("Development-only OTP is fixed at 123456; no SMS is sent.")
     print("Real bank inquiry and OCR are disabled.")
     print("DO NOT use this server or database for production data.")
     print("Listening on http://{}:{}/".format(args.host,args.port),flush=True)
