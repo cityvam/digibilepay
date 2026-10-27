@@ -171,6 +171,77 @@ def check_auth_and_admin_routes():
     print("PASS: beta inquiry explicitly reports unavailable bank integration (HTTP 503)")
     return phone, password, token
 
+def check_admin_module_mutations(token):
+    status, created, _, _=request("/api/v1/admin/contract-templates","POST",
+        {"title":"CI Template","bodyHtml":"<h1>CI template</h1>","type":"Company","status":"Draft"},token)
+    assert status==201, created
+    template=json_data(created); tid=template["id"]
+    status, validation, _, _=request(f"/api/v1/admin/contract-templates/{tid}/validate","POST",{},token)
+    assert status==201 and not json_data(validation).get("problems"), validation
+    status, preview, _, _=request(f"/api/v1/admin/contract-templates/{tid}/preview","POST",{},token)
+    assert status==201 and "CI template" in json_data(preview).get("html",""), preview
+    status, published, _, _=request(f"/api/v1/admin/contract-templates/{tid}/publish","POST",{},token)
+    assert status==201 and json_data(published).get("status")=="Published", published
+    status, version, _, _=request(f"/api/v1/admin/contract-templates/{tid}/new-version","POST",{},token)
+    assert status==201 and json_data(version).get("id")!=tid, version
+
+    sample_boundary="----TemplateSampleBoundaryCI"
+    sample_body=(b"--"+sample_boundary.encode()+b"\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.txt\"\r\nContent-Type: text/plain\r\n\r\ntemplate-sample-data\r\n--"+sample_boundary.encode()+b"--\r\n")
+    status, sample_meta, _, _=request(f"/api/v1/admin/contract-templates/{tid}/sample","POST",
+        raw_body=sample_body,content_type="multipart/form-data; boundary="+sample_boundary,token=token)
+    assert status==201, sample_meta
+    status, _, sample_bytes, _=request(f"/api/v1/admin/contract-templates/{tid}/sample",token=token)
+    assert status==200 and sample_bytes==b"template-sample-data", sample_bytes
+
+    status, contract, _, _=request("/api/v1/admin/contracts/generate","POST",
+        {"userId":"CI-USER","productId":"p3","amount":1000000,"months":3,"dry":False,"stage":"Draft"},token)
+    assert status==201, contract
+    contract_obj=json_data(contract); cid=contract_obj["id"]
+    status, _, html, ctype=request(f"/api/v1/admin/contracts/{cid}/html",token=token)
+    assert status==200 and b"قرارداد نمونه پیش‌نمایش" in html and "text/html" in ctype, (status,ctype,html)
+    status, signed, _, _=request(f"/api/v1/admin/contracts/{cid}/sign","POST",{},token)
+    assert status==201 and json_data(signed).get("status")=="Signed", signed
+
+    for code,name in [("1000","CI Cash"),("2000","CI Clearing")]:
+        status, account, _, _=request("/api/v1/admin/ledger/accounts","POST",
+            {"code":code,"name":name,"type":"Asset"},token)
+        assert status==201, account
+    status, entry, _, _=request("/api/v1/admin/ledger/entries","POST",
+        {"memo":"CI balanced entry","lines":[{"accountId":"1000","debit":1500,"credit":0},{"accountId":"2000","debit":0,"credit":1500}]},token)
+    assert status==201, entry
+    status, balance, _, _=request("/api/v1/admin/ledger/trial-balance",token=token)
+    assert status==200 and any(x.get("code")=="1000" and x.get("debit")==1500 for x in json_data(balance)), balance
+    status, reversed_entry, _, _=request("/api/v1/admin/ledger/entries/"+json_data(entry)["id"]+"/reverse","POST",{},token)
+    assert status==201 and json_data(reversed_entry).get("reverses")==json_data(entry)["id"], reversed_entry
+
+    status, tenant, _, _=request("/api/v1/admin/tenants","POST",
+        {"name":"CI Tenant","slug":"ci-tenant","brand":{"logoText":"C"},"isActive":True},token)
+    assert status==201, tenant
+    tenant_id=json_data(tenant)["id"]
+    status, domain, _, _=request(f"/api/v1/admin/tenants/{tenant_id}/domains","POST",
+        {"host":"ci.example.test","isPrimary":False},token)
+    assert status==201 and json_data(domain).get("domains"), domain
+    domain_id=json_data(domain)["domains"][-1]["id"]
+    status, _, _, _=request(f"/api/v1/admin/tenants/{tenant_id}/domains/{domain_id}","DELETE",token=token)
+    assert status==200, "tenant domain delete failed"
+
+    status, product, _, _=request("/api/v1/admin/loan-products","POST",
+        {"name":"CI Temporary Plan","slug":"ci-temporary-plan","description":"CI only","minAmount":1000,
+         "maxAmount":5000,"intervalDays":30,"tiers":[{"months":3,"feePercent":1,"downPaymentPercent":0}],
+         "conditions":{},"documents":[],"isActive":True},token)
+    assert status==201, product
+    product_id=json_data(product)["id"]
+    status, toggled, _, _=request(f"/api/v1/admin/loan-products/{product_id}/toggle","POST",{},token)
+    assert status==201 and json_data(toggled).get("isActive") is False, toggled
+    status, _, _, _=request(f"/api/v1/admin/loan-products/{product_id}","DELETE",token=token)
+    assert status==200, "temporary product delete failed"
+
+    status, backup, _, _=request("/api/v1/admin/backups","POST",{},token)
+    assert status==201 and backup.get("name"), backup
+    status, _, backup_bytes, ctype=request("/api/v1/admin/backups/"+backup["name"],token=token)
+    assert status==200 and b'"previewOnly": true' in backup_bytes and "application/json" in ctype, (status,ctype)
+    print("PASS: contract templates, contracts, ledger, tenant domains, product actions, backups")
+
 def check_multipart_and_public_forms(token):
     boundary="----DigitalPayPreviewBoundary7MA4YWxkTrZu0gW"
     parts=[
@@ -224,6 +295,7 @@ def main():
     check_inline_javascript()
     check_api_and_beta()
     phone,password,token=check_auth_and_admin_routes()
+    check_admin_module_mutations(token)
     check_multipart_and_public_forms(token)
     check_password_recovery()
     print("ALL PREVIEW SMOKE TESTS PASSED")
