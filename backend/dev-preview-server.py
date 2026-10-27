@@ -731,6 +731,12 @@ def api_get(handler,path,query):
         require_admin(handler)
         with connect_db() as c: rows=c.execute("SELECT * FROM loan_products ORDER BY sort_order,name").fetchall()
         return 200,{"data":[product_json(r) for r in rows]}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)",path,re.I)
+    if match:
+        require_admin(handler); ident=match.group(1)
+        with connect_db() as c: row=c.execute("SELECT * FROM loan_products WHERE id=? OR slug=?",(ident,ident)).fetchone()
+        if not row: raise ApiError(404,"طرح وام پیدا نشد.")
+        return 200,{"data":product_json(row)}
     if p=="/api/v1/admin/users":
         require_admin(handler)
         with connect_db() as c: rows=c.execute("SELECT * FROM app_users ORDER BY created_at DESC").fetchall()
