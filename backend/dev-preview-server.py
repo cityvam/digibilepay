@@ -389,8 +389,8 @@ def preview_admin_get(handler, path, query):
                 "entity":r["entity"],"entityId":r["entity_id"],"detail":json.loads(r["detail_json"] or "{}"),
                 "hash":r["entry_hash"]} for r in rows]}
     if p=="/api/v1/admin/ledger/trial-balance":
-        accounts=record_list("ledger-accounts")
-        entries=record_list("ledger-entries")
+        accounts=record_list("ledger/accounts")
+        entries=record_list("ledger/entries")
         balances=[]
         for account in accounts:
             debit=credit=0
