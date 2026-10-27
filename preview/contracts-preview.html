@@ -1,0 +1,64 @@
+<!doctype html><html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>قراردادهای من</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap">
+<style>
+
+/* Layout: centered auth card on a dark plum ground; segmented switch between password and OTP, captcha row, countdown. Palette: plum ink neutrals + saffron accent. All radii 14px, fields 48px high. */
+:root{--bg:#130c1f;--surface:#1d1330;--surface2:#271a3e;--line:#3a2c52;--fg:#f3edfb;--muted:#a99bc0;--brand:#4a2a86;--accent:#ffb629;--accent-ink:#2a1a00;--ok:#5fd6a0;--bad:#ff8a9a;--r:14px;--f-body:'Vazirmatn',Tahoma,sans-serif;--f-num:'JetBrains Mono','Vazirmatn',monospace;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f6f2fc;--surface:#ffffff;--surface2:#efe8f9;--line:#dccff0;--fg:#1c1230;--muted:#645878;--brand:#3b1f6b;--accent:#e29a00;--ok:#12805a;--bad:#c43a52;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-body);line-height:1.8;direction:rtl;min-height:100vh;display:grid;place-items:center;padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.card{width:min(440px,100%);background:var(--surface);border:1px solid var(--line);border-radius:24px;padding:28px 24px;box-shadow:0 30px 80px -30px rgba(0,0,0,.6)}
+.logo{display:flex;gap:10px;align-items:center;font-weight:900;font-size:1.4rem;margin-bottom:4px}.logo i{width:38px;height:38px;border-radius:12px;background:var(--brand);display:grid;place-items:center;color:var(--accent);font-style:normal}
+h1{font-size:1.2rem;margin:10px 0 2px}.sub{color:var(--muted);font-size:.88rem;margin:0 0 16px}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:999px;padding:4px;margin-bottom:16px}.seg button{font:inherit;font-weight:700;font-size:.9rem;border:0;border-radius:999px;padding:8px;background:none;color:var(--muted);cursor:pointer;min-height:40px}.seg button[aria-selected=true]{background:var(--brand);color:#fff}
+.fld{margin-bottom:12px}.fld label{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+.in{position:relative}.in input{width:100%;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:0 14px;min-height:48px}
+.in input.ltr{direction:ltr;text-align:left}.in .eye{position:absolute;inset-block:0;left:6px;width:40px;border:0;background:none;color:var(--muted);cursor:pointer;display:grid;place-items:center;border-radius:12px}.in .eye:hover{color:var(--fg)}
+.in input.pw{padding-left:48px}
+.h{font-size:.78rem;min-height:1.2em;margin-top:3px}.h.bad{color:var(--bad)}.h.ok{color:var(--ok)}
+.cap{display:flex;gap:8px;align-items:center}.cap img{height:48px;border-radius:12px;border:1px solid var(--line);flex:none;max-width:48%}.cap .in{flex:1;min-width:0}
+.rf{width:48px;height:48px;flex:none;border:1px solid var(--line);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;font-size:1.1rem}
+.btn{width:100%;font:inherit;font-weight:700;border:0;border-radius:var(--r);min-height:50px;background:var(--accent);color:var(--accent-ink);cursor:pointer;font-size:1rem}.btn[disabled]{opacity:.5;cursor:not-allowed}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--fg);min-height:44px;font-size:.9rem;margin-top:8px}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.otp{display:flex;gap:8px;direction:ltr;justify-content:center;margin:6px 0}.otp input{width:100%;max-width:52px;height:56px;text-align:center;font-family:var(--f-num);font-size:1.4rem;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r)}
+.timer{text-align:center;font-family:var(--f-num);color:var(--muted);margin:8px 0;font-size:.95rem}
+.msg{border-radius:var(--r);padding:8px 12px;font-size:.88rem;margin-bottom:12px;border:1px solid var(--line)}.msg.bad{color:var(--bad);border-color:var(--bad)}.msg.ok{color:var(--ok);border-color:var(--ok)}
+.foot{display:flex;justify-content:space-between;margin-top:16px;font-size:.86rem}.foot a{color:var(--accent);text-decoration:none}
+.pv{position:fixed;inset-inline:0;top:env(safe-area-inset-top,0px);background:var(--surface2);color:var(--muted);text-align:center;font-size:.78rem;padding:4px}
+[hidden]{display:none!important}
+.authtabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:rgba(127,127,127,.16);padding:4px;border-radius:12px;margin-bottom:16px}.authtabs a{text-align:center;padding:9px;border-radius:9px;text-decoration:none;color:inherit;font-weight:700}.authtabs a[aria-current=page]{background:var(--accent,#f5a400);color:#2a1a00}
+body{display:block;place-items:unset}.wrap{width:min(720px,100%);margin:0 auto}.card{width:100%;margin-bottom:16px;padding:20px}
+select,input[type=text],textarea{width:100%;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:var(--r);padding:8px 12px;min-height:48px}
+.doc{border:1px solid var(--line);border-radius:var(--r);padding:12px;margin-top:10px}.doc h3{margin:0 0 4px;font-size:1rem}
+.pill{display:inline-block;border-radius:999px;padding:0 10px;font-size:.78rem;border:1px solid var(--line)}.pill.a{color:var(--ok);border-color:var(--ok)}.pill.r{color:var(--bad);border-color:var(--bad)}.pill.p{color:var(--accent);border-color:var(--accent)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.row .btn{width:auto;min-height:40px;padding:0 16px;font-size:.88rem}
+.pre{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px;font-size:.82rem;max-height:140px;overflow:auto;direction:rtl}
+.fgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}@media(max-width:520px){.fgrid{grid-template-columns:1fr}}
+img.prev{max-width:100%;max-height:220px;border-radius:12px;margin-top:8px}
+</style></head><body><div style="background:var(--surface2);color:var(--muted);text-align:center;font-size:.78rem;padding:4px;margin:-24px -16px 12px">پیش‌نمایش با داده‌ی نمونه</div>
+<div class="wrap">
+ <div class="card"><h1 style="margin-top:0">قراردادهای من</h1><p class="sub">قراردادهای ارائه‌شده برای شما اینجا نمایش داده می‌شود. پیش از قبول، متن را کامل بخوانید. «قبول الکترونیکی» زمان، حساب کاربری و IP شما را ثبت می‌کند و جایگزین امضای دیجیتال قانونی نیست؛ برای قراردادهایی که چنین امضایی لازم دارند، مراحل بعدی توسط شرکت اعلام می‌شود.</p><div id="msg" class="msg" hidden></div></div>
+ <div id="list"></div><div id="view"></div>
+</div>
+<script>
+const MOCK=true;
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const TK=()=>{for(const k of ['token','accessToken','jwt']){try{const v=localStorage.getItem(k);if(v)return v}catch(_){}}return null};
+const ST={Presented:['ارائه‌شده','p'],AwaitingSignature:['در انتظار قبول شما','p'],Signed:['قبول شد','a'],Rejected:['رد شد','r'],Expired:['منقضی شد','r']};
+function msg(t,k){const m=$('#msg');if(!t){m.hidden=true;return}m.hidden=false;m.className='msg '+(k||'bad');m.textContent=t}
+let DB=[{id:'c1',number:'C-20261027-12345',title:'قرارداد اقساط شرکت',status:'AwaitingSignature',presentedAt:new Date().toISOString()},{id:'c2',number:'C-20261020-55555',title:'تعهدنامه',status:'Signed',signedAt:new Date().toISOString()}];
+const toLogin=()=>{location.href='/login.html?next='+encodeURIComponent(location.pathname);throw new Error('auth')};
+async function api(m,u,body,raw){if(MOCK){await new Promise(r=>setTimeout(r,300));if(raw)return new Response('<!doctype html><html dir="rtl"><meta charset="utf-8"><body style="font-family:Tahoma;padding:16px"><h3>متن قرارداد نمونه</h3><p>در سامانه‌ی واقعی متن کامل قرارداد اینجا نمایش داده می‌شود.</p></body></html>');
+  if(m==='GET')return DB;const c=DB.find(x=>u.includes(x.id));c.status=u.endsWith('sign')?'Signed':'Rejected';return{}}
+ const t=TK();if(!t)toLogin();const r=await fetch(u,{method:m,headers:Object.assign({Authorization:'Bearer '+t},body?{'Content-Type':'application/json'}:{}),body:body?JSON.stringify(body):undefined,credentials:'same-origin'});
+ if(r.status===401)toLogin();if(raw)return r;const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'خطا در انجام عملیات');return j}
+async function load(){let L;try{L=await api('GET','/api/v1/me/contracts')}catch(e){if(e.message!=='auth')msg(e.message);return}
+ $('#list').innerHTML=L.length?L.map(c=>{const st=ST[c.status]||[c.status,'p'];const open=c.status==='Presented'||c.status==='AwaitingSignature';return `<div class="card doc" data-id="${esc(c.id)}"><h3>${esc(c.title)} <span class="pill ${st[1]}">${st[0]}</span></h3><div class="sub">شماره ${esc(c.number)}${c.expiresAt?' — مهلت تا '+new Date(c.expiresAt).toLocaleDateString('fa-IR'):''}</div><div class="row"><button class="btn ghost" data-a="v">مشاهده‌ی متن</button>${open?'<button class="btn" data-a="s">قبول الکترونیکی</button><button class="btn ghost" data-a="r">رد</button>':''}</div></div>`}).join(''):'<div class="card"><p class="sub">قراردادی برای شما ارائه نشده است.</p></div>'}
+$('#list').onclick=async e=>{const b=e.target.closest('[data-a]');if(!b)return;const id=b.closest('.doc').dataset.id;msg('');
+ try{if(b.dataset.a==='v'){const r=await api('GET','/api/v1/me/contracts/'+id+'/html',null,true);if(!r.ok){msg('نمایش قرارداد ممکن نشد');return}$('#view').innerHTML='<div class="card"><iframe sandbox title="متن قرارداد" style="width:100%;height:70vh;border:1px solid var(--line);border-radius:12px;background:#fff"></iframe><p class="sub">برای دریافت PDF از منوی چاپ مرورگر استفاده کنید.</p></div>';$('#view iframe').srcdoc=await r.text();$('#view').scrollIntoView()}
+  else if(b.dataset.a==='s'){if(!confirm('متن قرارداد را خوانده‌ام و آن را قبول می‌کنم.'))return;await api('POST','/api/v1/me/contracts/'+id+'/sign');msg('قرارداد ثبت و قبول شد.','ok');await load()}
+  else if(b.dataset.a==='r'){const n=prompt('دلیل رد (اختیاری):');if(n===null)return;await api('POST','/api/v1/me/contracts/'+id+'/reject',{note:n});msg('قرارداد رد شد.','ok');await load()}}catch(x){if(x.message!=='auth')msg(x.message)}};
+load();
+</script></body></html>
