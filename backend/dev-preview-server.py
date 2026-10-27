@@ -781,6 +781,46 @@ def api_post(handler,path,body):
         return 200,{"ok":True,"message":"طرح‌های پیش‌فرض در دیتابیس توسعه‌ای ثبت شدند."}
     return 201,preview_admin_post(handler,path,body)
 
+def api_put(handler,path,body):
+    p=path.lower()
+    if re.fullmatch(r"/api/v1/admin/loan-products/[^/]+",path,re.I):
+        if not isinstance(body,dict): raise ApiError(400,"اطلاعات طرح معتبر نیست.")
+        require_admin(handler)
+        ident=path.rsplit("/",1)[-1]
+        return 200,{"data":save_product(body,ident)}
+    if re.fullmatch(r"/api/v1/me/documents/[^/]+/fields",path,re.I):
+        user=auth_user(handler); ident=path.split("/")[-2]
+        item=record_get("documents",ident)
+        if not item or str(item.get("userId") or "") not in (str(user["id"]),str(user["phone"])):
+            raise ApiError(404,"مدرک پیدا نشد.")
+        fields=body.get("fields",{}) if isinstance(body,dict) else {}
+        if not isinstance(fields,dict): raise ApiError(400,"فیلدهای مدرک معتبر نیستند.")
+        updated=save_record("documents",{"fields":fields},ident,user["id"],"edit-fields")
+        return 200,{"data":public_record(updated)}
+    if p=="/api/v1/admin/app-settings" or re.fullmatch(r"/api/v1/admin/(contract-templates|contract-variables|contracts|counterparties|documents|inquiries|ledger/accounts|ledger/entries|marketers|orders|payment-declarations|tenants|virtual-cards)/[^/]+",path,re.I) or re.fullmatch(r"/api/v1/admin/virtual-cards/[^/]+/limit",path,re.I) or re.fullmatch(r"/api/v1/admin/loan-products/[^/]+/contracts",path,re.I):
+        return 200,preview_admin_put(handler,path,body)
+    raise ApiError(501,"این عملیات در پیش‌نمایش توسعه‌ای هنوز پیاده‌سازی نشده است: "+path)
+
+def api_delete(handler,path):
+    p=path.lower()
+    if re.fullmatch(r"/api/v1/admin/loan-products/[^/]+",path,re.I):
+        require_admin(handler); ident=path.rsplit("/",1)[-1]
+        with connect_db() as c:
+            row=c.execute("SELECT id FROM loan_products WHERE id=? OR slug=?",(ident,ident)).fetchone()
+            if not row: raise ApiError(404,"طرح پیدا نشد.")
+            c.execute("DELETE FROM loan_products WHERE id=?",(row["id"],))
+        return 200,{"ok":True}
+    if re.fullmatch(r"/api/v1/me/documents/[^/]+",path,re.I):
+        user=auth_user(handler); ident=path.rsplit("/",1)[-1]; item=record_get("documents",ident)
+        if not item or str(item.get("userId") or "") not in (str(user["id"]),str(user["phone"])):
+            raise ApiError(404,"مدرک پیدا نشد.")
+        delete_record("documents",ident,user["id"])
+        return 200,{"ok":True}
+    if re.fullmatch(r"/api/v1/admin/loan-products/[^/]+/image",path,re.I):
+        require_admin(handler)
+        return 200,{"ok":True,"url":""}
+    return 200,preview_admin_delete(handler,path)
+
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs): super().__init__(*args,directory=str(FRONTEND),**kwargs)
     def end_headers(self):
@@ -796,25 +836,22 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_response(status); self.send_header("Content-Type","application/json; charset=utf-8")
         self.send_header("Content-Length",str(len(raw))); self.send_header("Cache-Control","no-store")
         self.send_header("X-Content-Type-Options","nosniff"); self.end_headers(); self.wfile.write(raw)
+    def send_raw(self,status,raw,content_type="application/octet-stream"):
+        self.send_response(status); self.send_header("Content-Type",content_type)
+        self.send_header("Content-Length",str(len(raw))); self.send_header("Cache-Control","no-store")
+        self.send_header("X-Content-Type-Options","nosniff"); self.end_headers(); self.wfile.write(raw)
     def dispatch_api(self,method):
         path=urlsplit(self.path).path; query=parse_qs(urlsplit(self.path).query,keep_blank_values=True)
         try:
             if method=="GET": status,result=api_get(self,path,query)
-            elif method=="POST": status,result=api_post(self,path,read_json(self))
-            elif method=="PUT":
-                body=read_json(self); match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)",path,re.IGNORECASE)
-                if not match: raise ApiError(501,"این مسیر در پیش‌نمایش توسعه‌ای پیاده‌سازی نشده است.")
-                require_admin(self); status,result=200,{"data":save_product(body,match.group(1))}
-            elif method=="DELETE":
-                match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)",path,re.IGNORECASE)
-                if not match: raise ApiError(501,"این مسیر در پیش‌نمایش توسعه‌ای پیاده‌سازی نشده است.")
-                require_admin(self)
-                with connect_db() as c:
-                    row=c.execute("SELECT id FROM loan_products WHERE id=? OR slug=?",(match.group(1),match.group(1))).fetchone()
-                    if not row: raise ApiError(404,"طرح پیدا نشد.")
-                    c.execute("DELETE FROM loan_products WHERE id=?",(row["id"],))
-                status,result=200,{"ok":True}
+            elif method=="POST": status,result=api_post(self,path,read_request_body(self))
+            elif method=="PUT": status,result=api_put(self,path,read_request_body(self))
+            elif method=="DELETE": status,result=api_delete(self,path)
             else: raise ApiError(405,"روش HTTP پشتیبانی نمی‌شود.")
+            if isinstance(result,tuple) and len(result)==2 and isinstance(result[0],bytes):
+                self.send_raw(status,result[0],result[1]); return
+            if method=="GET" and isinstance(result,str) and path.lower().endswith("/html"):
+                self.send_raw(status,result.encode("utf-8"),"text/html; charset=utf-8"); return
             self.send_json(status,result)
         except ApiError as e: self.send_json(e.status,{"ok":False,"message":e.message})
         except Exception:
