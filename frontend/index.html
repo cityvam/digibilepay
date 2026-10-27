@@ -165,7 +165,7 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 <script>
 document.documentElement.dir='rtl';document.documentElement.lang='fa';
 /* ---------- config ---------- */
-const CFG={mock:false,endpoints:{login:'/api/v1/Auth/login',register:'/api/v1/Auth/register',verifyOtp:'/api/v1/Auth/verify-otp',me:'/api/v1/Auth/me',plans:'/api/v1/loan-products',betaInquiry:'/api/v1/beta/inquiry'},routes:{account:'/profile.html',admin:'/admin.html'}};
+const CFG={mock:false,endpoints:{login:'/api/v1/Auth/login',register:'/api/v1/Auth/register',verifyOtp:'/api/v1/Auth/verify-otp',me:'/api/v1/Auth/me',plans:'/api/v1/loan-products',betaInquiry:'/api/v1/beta/inquiry'},routes:{account:'/profile.html',admin:'/panel.html'}};
 /* ---------- helpers ---------- */
 const $=s=>document.querySelector(s);
 const fa=n=>Number(n).toLocaleString('fa-IR').replace(/,/g,'٬');
@@ -187,8 +187,8 @@ function calc(p,a,t){const down=Math.round(a*t.down/100/1000)*1000,fin=a-down,fe
 /* ---------- auth state ---------- */
 const LK={login:'#',me:'#',admin:'#'};
 let role='guest',user=null;
-function renderAuth(){const b=role==='guest'?[['ورود / عضویت','solid','auth']]:role==='customer'?[['حساب من','solid','me']]:[['پنل مدیریت','','admin'],['حساب من','solid','me']];
- $('#auth').innerHTML=b.map(x=>`<button class="btn ${x[1]}" data-go="${x[2]}">${x[0]}</button>`).join('');
+function renderAuth(){const isAdmin=role==='admin'||role==='superadmin';const b=role==='guest'?[['ورود / عضویت','solid','auth']]:isAdmin?[['پنل مدیریت','','admin'],['حساب من','solid','me']]:[['حساب من','solid','me']];
+ $('#auth').innerHTML=b.map(x=>'<button class="btn '+x[1]+'" data-go="'+x[2]+'">'+x[0]+'</button>').join('');
  const p=b[b.length-1];$('#mbAuth').textContent=p[0];$('#mbAuth').dataset.go=p[2];
  document.querySelectorAll('[data-role]').forEach(c=>c.setAttribute('aria-pressed',c.dataset.role===role))}
 document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(!g)return;e.preventDefault();const k=g.dataset.go;
@@ -330,8 +330,17 @@ function openApply(p){const t=p.tiers[S.ti],c=calc(p,S.amt,t);modal(`<button cla
  <p class="note">مدارک لازم: ${p.docs.filter(d=>d[1]).map(d=>d[0]).join('، ')}. بعد از ثبت، عکس مدارک را در حساب من بارگذاری می‌کنید. با تأیید وام، کارت مجازی شما صادر می‌شود.</p>
  <button class="btn solid lg" style="width:100%;margin-top:10px" id="ap2">ثبت درخواست</button>`);$('#ap2').onclick=()=>{closeM();toast('درخواست ثبت شد. مرحله‌ی بعد: بارگذاری مدارک')}}
 /* ---------- boot ---------- */
-async function detectRole(){let t=null;try{for(let i=0;i<localStorage.length;i++){const v=localStorage.getItem(localStorage.key(i));if(v&&/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(v)){t=v;break}}}catch(e){}
- if(!t)return;try{const r=await fetch(CFG.endpoints.me,{headers:{Authorization:'Bearer '+t}});if(!r.ok)return;const j=await r.json(),d=j.data||j;const rs=[].concat(d.roles||d.role||[]).map(x=>String(x).toLowerCase());user=d.fullName||null;role=rs.some(x=>/admin|manager/.test(x))?'admin':'customer'}catch(e){}}
+function jwtPayload(token){try{const part=String(token||'').split('.')[1];if(!part)return{};const raw=atob(part.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-part.length%4)%4));const bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));return JSON.parse(new TextDecoder().decode(bytes))}catch(e){return{}}}
+function extractRoles(source){const out=[];const add=value=>{if(value==null)return;if(Array.isArray(value)){value.forEach(add);return}if(typeof value==='string'){out.push(...value.split(/[,;|]/).map(x=>x.trim()).filter(Boolean));return}if(typeof value==='object'){for(const k of ['name','role','roleName','value','type'])if(value[k]!=null)add(value[k]);}};
+ if(!source||typeof source!=='object')return out;
+ for(const k of Object.keys(source)){const key=k.toLowerCase();if(['role','roles','userrole','userroles','rolename','rolenames'].includes(key)||key.endsWith('/role')||key.includes('claims'))add(source[k]);}
+ return out.map(x=>String(x).normalize('NFKC').toLowerCase().replace(/[\s_-]+/g,''))}
+function classifyRole(values){const rs=values.map(x=>String(x).normalize('NFKC').toLowerCase().replace(/[\s_-]+/g,''));if(rs.some(x=>x==='superadmin'||x==='superadministrator'||x==='مدیرکل'))return'superadmin';if(rs.some(x=>x==='admin'||x==='administrator'||x==='مدیر'))return'admin';if(rs.some(x=>x==='merchant'||x==='seller'||x==='پذیرنده'))return'merchant';if(rs.some(x=>x==='agent'||x==='representative'||x==='نماینده'))return'agent';if(rs.some(x=>x==='customer'||x==='client'||x==='مشتری'))return'customer';return'customer'}
+async function detectRole(){let token=null;try{for(const key of ['token','accessToken','jwt']){const value=localStorage.getItem(key);if(value&&value.split('.').length===3){token=value;break}}if(!token){for(let i=0;i<localStorage.length;i++){const value=localStorage.getItem(localStorage.key(i));if(value&&/^eyJ[\w-]+\.[\w-]+\.[\w-]+$/.test(value)){token=value;break}}}}catch(e){}
+ if(!token)return;const payload=jwtPayload(token);let roles=extractRoles(payload);user=payload.fullName||payload.name||payload.unique_name||null;
+ try{const response=await fetch(CFG.endpoints.me,{headers:{Authorization:'Bearer '+token}});if(response.ok){const json=await response.json(),data=json.data||json;user=data.fullName||data.name||user;roles=roles.concat(extractRoles(data));if(data.user&&typeof data.user==='object')roles=roles.concat(extractRoles(data.user));}}
+ catch(e){}
+ role=classifyRole(roles)}
 
 
 
