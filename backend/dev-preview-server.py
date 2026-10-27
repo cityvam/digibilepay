@@ -600,7 +600,29 @@ def api_get(handler,path,query):
         require_admin(handler)
         with connect_db() as c: rows=c.execute("SELECT * FROM app_users ORDER BY created_at DESC").fetchall()
         return 200,{"data":[safe_user(r) for r in rows]}
-    raise ApiError(501,"این مسیر در بک‌اند توسعه‌ای Codespaces پیاده‌سازی نشده است: "+path)
+    if p=="/api/v1/me/contracts":
+        user=auth_user(handler)
+        owned=[x for x in record_list("contracts") if str(x.get("userId") or "") in (str(user["id"]),str(user["phone"]))]
+        return 200,{"data":[public_record(x) for x in owned]}
+    if p=="/api/v1/me/documents":
+        user=auth_user(handler)
+        owned=[x for x in record_list("documents") if str(x.get("userId") or "") in (str(user["id"]),str(user["phone"]))]
+        return 200,{"data":[public_record(x) for x in owned]}
+    match=re.fullmatch(r"/api/v1/me/contracts/([^/]+)/html",path,re.I)
+    if match:
+        user=auth_user(handler); item=record_get("contracts",match.group(1))
+        if not item or str(item.get("userId") or "") not in (str(user["id"]),str(user["phone"])):
+            raise ApiError(404,"قرارداد پیدا نشد.")
+        return 200,str(item.get("html") or "<h1>قرارداد پیش‌نمایش</h1><p>این متن نمونه است و قرارداد حقوقی معتبر محسوب نمی‌شود.</p>")
+    match=re.fullmatch(r"/api/v1/me/documents/([^/]+)/file",path,re.I)
+    if match:
+        user=auth_user(handler); item=record_get("documents",match.group(1))
+        if not item or str(item.get("userId") or "") not in (str(user["id"]),str(user["phone"])):
+            raise ApiError(404,"مدرک پیدا نشد.")
+        file_data=item.get("fileData")
+        if not file_data: raise ApiError(404,"فایل این مدرک در پیش‌نمایش موجود نیست.")
+        return 200,(base64.b64decode(file_data),str(item.get("contentType") or "application/octet-stream"))
+    return 200,preview_admin_get(handler,path,query)
 
 def save_product(body,product_id=None):
     name=str(body.get("name") or body.get("title") or "").strip()
@@ -631,6 +653,7 @@ def save_product(body,product_id=None):
 
 def api_post(handler,path,body):
     p=path.lower()
+    if not isinstance(body,dict): raise ApiError(400,"بدنه درخواست باید یک شیء JSON یا فرم فایل معتبر باشد.")
     if p=="/api/v1/security/otp/request":
         phone=normalize_phone(body.get("phone")); purpose=str(body.get("purpose") or "login").lower()
         if not phone: raise ApiError(400,"شماره موبایل معتبر نیست.")
@@ -720,11 +743,43 @@ def api_post(handler,path,body):
             c.execute("UPDATE loan_products SET is_active=? WHERE id=?",(0 if row["is_active"] else 1,row["id"]))
             updated=c.execute("SELECT * FROM loan_products WHERE id=?",(row["id"],)).fetchone()
         return 200,{"data":product_json(updated)}
+    if p=="/api/v1/me/documents":
+        user=auth_user(handler)
+        upload=body.get("file") if isinstance(body.get("file"),dict) else {}
+        if not upload.get("contentBase64"): raise ApiError(400,"ابتدا یک فایل انتخاب کنید.")
+        item={"userId":user["id"],"kind":str(body.get("kind") or "مدرک").strip()[:100],
+              "status":"Pending","createdOn":iso_now(),"createdAt":iso_now(),
+              "fileName":upload.get("filename","upload"),"contentType":upload.get("contentType","application/octet-stream"),
+              "fileData":upload["contentBase64"],"size":int(upload.get("size") or 0),"fields":{},
+              "ocrText":"","reviewNote":""}
+        saved=save_record("documents",item,actor_id=user["id"],action="upload")
+        return 201,{"data":public_record(saved),"ocr":False}
+    match=re.fullmatch(r"/api/v1/me/contracts/([^/]+)/(sign|reject)",path,re.I)
+    if match:
+        user=auth_user(handler); item=record_get("contracts",match.group(1))
+        if not item or str(item.get("userId") or "") not in (str(user["id"]),str(user["phone"])):
+            raise ApiError(404,"قرارداد پیدا نشد.")
+        status="Signed" if match.group(2).lower()=="sign" else "Rejected"
+        events=list(item.get("events",[])); events.append({"at":iso_now(),"action":status.lower(),"note":str(body.get("note") or "")})
+        updated=save_record("contracts",{"status":status,"events":events,"rejectionNote":str(body.get("note") or "")},
+                            match.group(1),user["id"],status.lower())
+        return 200,{"data":public_record(updated)}
+    if p=="/api/v1/admin/loan-products":
+        require_admin(handler); return 201,{"data":save_product(body)}
+    match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)/toggle",path,re.IGNORECASE)
+    if match:
+        require_admin(handler)
+        with connect_db() as c:
+            row=c.execute("SELECT * FROM loan_products WHERE id=? OR slug=?",(match.group(1),match.group(1))).fetchone()
+            if not row: raise ApiError(404,"طرح پیدا نشد.")
+            c.execute("UPDATE loan_products SET is_active=? WHERE id=?",(0 if row["is_active"] else 1,row["id"]))
+            updated=c.execute("SELECT * FROM loan_products WHERE id=?",(row["id"],)).fetchone()
+        return 200,{"data":product_json(updated)}
     if re.fullmatch(r"/api/v1/admin/loan-products/[^/]+/seed",path,re.IGNORECASE):
         require_admin(handler)
         with connect_db() as c: seed_products(c)
         return 200,{"ok":True,"message":"طرح‌های پیش‌فرض در دیتابیس توسعه‌ای ثبت شدند."}
-    raise ApiError(501,"این مسیر در بک‌اند توسعه‌ای Codespaces پیاده‌سازی نشده است: "+path)
+    return 201,preview_admin_post(handler,path,body)
 
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self,*args,**kwargs): super().__init__(*args,directory=str(FRONTEND),**kwargs)
