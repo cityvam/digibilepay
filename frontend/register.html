@@ -16,6 +16,10 @@ h1{font-size:1.2rem;margin:10px 0 2px}.sub{color:var(--muted);font-size:.88rem;m
 .in input.ltr{direction:ltr;text-align:left}.in .eye{position:absolute;inset-block:0;left:6px;width:40px;border:0;background:none;color:var(--muted);cursor:pointer;display:grid;place-items:center;border-radius:12px}.in .eye:hover{color:var(--fg)}
 .in input.pw{padding-left:48px}
 .h{font-size:.78rem;min-height:1.2em;margin-top:3px}.h.bad{color:var(--bad)}.h.ok{color:var(--ok)}
+.pw-strength{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:.78rem;color:var(--muted)}
+.pw-bars{display:flex;gap:4px;flex:1;max-width:150px}.pw-bars i{height:5px;flex:1;border-radius:99px;background:var(--line)}
+.pw-strength.weak .pw-bars i:first-child{background:var(--bad)}.pw-strength.medium .pw-bars i:nth-child(-n+2){background:#e0a020}.pw-strength.strong .pw-bars i{background:var(--ok)}
+.pw-strength.weak .pw-label{color:var(--bad)}.pw-strength.medium .pw-label{color:#e0a020}.pw-strength.strong .pw-label{color:var(--ok)}
 .cap{display:flex;gap:8px;align-items:center}.cap img{height:48px;border-radius:12px;border:1px solid var(--line);flex:none;max-width:48%}.cap .in{flex:1;min-width:0}
 .rf{width:48px;height:48px;flex:none;border:1px solid var(--line);border-radius:var(--r);background:none;color:var(--muted);cursor:pointer;font-size:1.1rem}
 .btn{width:100%;font:inherit;font-weight:700;border:0;border-radius:var(--r);min-height:50px;background:var(--accent);color:var(--accent-ink);cursor:pointer;font-size:1rem}.btn[disabled]{opacity:.5;cursor:not-allowed}
@@ -46,8 +50,8 @@ h1{font-size:1.2rem;margin:10px 0 2px}.sub{color:var(--muted);font-size:.88rem;m
   <div class="fld"><label for="ocrf">پر کردن خودکار از عکس کارت ملی (اختیاری)</label><input id="ocrf" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="width:100%;font:inherit"><div class="h" id="ocrh"></div><div class="h" style="color:var(--muted)">عکس فقط برای خواندن متن استفاده می‌شود و ذخیره نمی‌شود. نتیجه را حتماً بازبینی کنید.</div></div>
   <div class="fld"><label for="rn">نام و نام خانوادگی</label><div class="in"><input id="rn" autocomplete="name"></div><div class="h"></div></div>
   <div class="fld"><label for="rk">کد ملی</label><div class="in"><input id="rk" class="ltr" inputmode="numeric" maxlength="10"></div><div class="h"></div></div>
-  <div class="fld"><label for="re">ایمیل (اختیاری)</label><div class="in"><input id="re" class="ltr" type="email" autocomplete="email"></div><div class="h"></div></div>
-  <div class="fld"><label for="rp">رمز ثابت (حداقل ۸ رقم عددی)</label><div class="in"><input id="rp" class="ltr pw" type="password" inputmode="numeric" minlength="8" autocomplete="new-password"><button type="button" class="eye" id="eye" aria-label="نمایش رمز" aria-pressed="false"><svg id="eyeI" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="h"></div></div>
+  <div class="fld"><label for="re">ایمیل</label><div class="in"><input id="re" class="ltr" type="email" autocomplete="email" required></div><div class="h"></div></div>
+  <div class="fld"><div class="fld"><label for="rp">رمز ثابت (حداقل ۸ نویسه)</label><div class="in"><input id="rp" class="ltr pw" type="password" minlength="8" autocomplete="new-password"><button type="button" class="eye" id="eye" aria-label="نمایش رمز" aria-pressed="false"><svg id="eyeI" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="h"></div><div class="pw-strength" id="pwStrength" hidden aria-live="polite"><div class="pw-bars"><i></i><i></i><i></i></div><span class="pw-label">رمز عبور</span></div></div>
   <div class="fld"><label for="c3">کد امنیتی</label><div class="cap"><img id="ci3" alt="تصویر کد امنیتی"><button type="button" class="rf" data-rf="3" aria-label="کد امنیتی جدید">↻</button><div class="in"><input id="c3" class="ltr" inputmode="numeric" maxlength="5" autocomplete="off"></div></div><div class="h"></div></div>
   <label style="display:flex;gap:8px;font-size:.84rem;color:var(--muted);margin-bottom:12px"><input type="checkbox" id="rt"> قوانین و حریم خصوصی را می‌پذیرم.</label>
   <button class="btn" id="b3" type="submit">ایجاد حساب</button>
@@ -59,6 +63,7 @@ const NQ=(()=>{const n=new URLSearchParams(location.search).get('next');return n
 const MOCK=false;
 const API={captcha:'/api/v1/security/captcha',otpReq:'/api/v1/security/otp/request',otpVer:'/api/v1/security/otp/verify',otpSt:'/api/v1/security/otp/status',register:'/api/v1/security/register',after:NQ||'/'};
 const $=s=>document.querySelector(s),toEn=s=>String(s).replace(/[۰-۹]/g,d=>'۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g,d=>'٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+function passwordStrength(value){const v=toEn(value);if(!v)return{level:'',label:''};const c=[/[a-z]/.test(v),/[A-Z]/.test(v),/[0-9]/.test(v),/[^A-Za-z0-9]/.test(v)].filter(Boolean).length;if(v.length<8||c<2)return{level:'weak',label:'ضعیف'};if((v.length>=12&&c>=3)||(v.length>=10&&c===4))return{level:'strong',label:'قوی'};return{level:'medium',label:'متوسط'}}
 const fa=n=>Number(n).toLocaleString('fa-IR',{useGrouping:false}),okM=v=>/^09\d{9}$/.test(toEn(v));
 const okNid=v=>{v=toEn(v);if(!/^\d{10}$/.test(v)||/^(\d)\1{9}$/.test(v))return false;let s=0;for(let i=0;i<9;i++)s+=(+v[i])*(10-i);const r=s%11,c=+v[9];return r<2?c===r:c===11-r};
 function msg(t,k){const m=$('#msg');if(!t){m.hidden=true;return}m.hidden=false;m.className='msg '+(k||'bad');m.textContent=t}
@@ -87,6 +92,7 @@ $('#bR').onclick=()=>{step(1);loadCap('1');msg('برای ارسال مجدد، �
 $('#f2').onsubmit=async e=>{e.preventDefault();const code=[...document.querySelectorAll('#otp input')].map(i=>i.value).join('');if(code.length<6){msg('کد ۶ رقمی را کامل وارد کنید');return}
  $('#b2').disabled=true;try{const r=await call('POST',API.otpVer,{phone,code,purpose:'register'});if(r.ok){ticket=r.j.ticket;clearInterval(tmr);step(3)}else msg(r.j.message||'کد نادرست است')}catch(_){msg('اتصال برقرار نشد.')}$('#b2').disabled=false};
 $('#rk').oninput=()=>{const v=$('#rk').value;hint($('#rk'),v.length===10?(okNid(v)?'کد ملی از نظر ساختار معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
+$('#rp').oninput=()=>{const s=passwordStrength($('#rp').value),m=$('#pwStrength');m.hidden=!s.level;m.className='pw-strength '+s.level;m.querySelector('.pw-label').textContent=s.label};
 $('#ocrf').onchange=async()=>{const f=$('#ocrf').files[0],h=$('#ocrh');if(!f)return;h.className='h';h.textContent='در حال خواندن عکس…';
  if(f.size>6000000){h.className='h bad';h.textContent='حجم عکس حداکثر ۶ مگابایت است';return}
  try{let j;if(MOCK){await new Promise(r=>setTimeout(r,700));j={found:true,data:{fields:{fullName:'علی رضایی',nationalCode:'0499370899'}}}}
@@ -98,8 +104,9 @@ $('#ocrf').onchange=async()=>{const f=$('#ocrf').files[0],h=$('#ocrh');if(!f)ret
   h.className='h '+(n?'ok':'bad');h.textContent=n?'اطلاعات خوانده شد؛ لطفاً درستی آن را بررسی کنید.':'اطلاعاتی برای پر کردن پیدا نشد؛ دستی وارد کنید.'}
  catch(_){h.className='h bad';h.textContent='اتصال برقرار نشد'}};
 $('#f3').onsubmit=async e=>{e.preventDefault();msg('');const n=$('#rn').value.trim(),k=toEn($('#rk').value),p=toEn($('#rp').value),c=toEn($('#c3').value);let bad=false;
- if(n.split(' ').filter(Boolean).length<2){hint($('#rn'),'نام و نام خانوادگی را کامل بنویسید');bad=true}else hint($('#rn'),'');if(!okNid(k)){hint($('#rk'),'کد ملی معتبر نیست');bad=true}
- if(!/^[0-9]{8,}$/.test(p)){hint($('#rp'),'رمز ثابت باید حداقل ۸ رقم عددی باشد');bad=true}else hint($('#rp'),'');if(c.length!==5){hint($('#c3'),'کد امنیتی ۵ رقمی را وارد کنید');bad=true}else hint($('#c3'),'');if(!$('#rt').checked){msg('برای ادامه، قوانین را بپذیرید.');bad=true}if(bad)return;
+ if(n.split(' ').filter(Boolean).length<2){hint($('#rn'),'نام و نام خانوادگی را کامل بنویسید');bad=true}else hint($('#rn'),'');if(!okNid(k)){hint($('#rk'),'کد ملی معتبر نیست');bad=true}else hint($('#rk'),'');
+ if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test($('#re').value.trim())){hint($('#re'),'ایمیل معتبر وارد کنید');bad=true}else hint($('#re'),'');
+ if(p.length<8){hint($('#rp'),'رمز ثابت باید حداقل ۸ نویسه باشد');bad=true}else hint($('#rp'),'');if(c.length!==5){hint($('#c3'),'کد امنیتی ۵ رقمی را وارد کنید');bad=true}else hint($('#c3'),'');if(!$('#rt').checked){msg('برای ادامه، قوانین را بپذیرید.');bad=true}if(bad)return;
  $('#b3').disabled=true;try{const r=await call('POST',API.register,{ticket,fullName:n,nationalCode:k,password:p,email:$('#re').value.trim()||null,captchaId:capId['3'],captchaAnswer:c});
   if(r.ok){if(MOCK){msg('ثبت‌نام موفق (پیش‌نمایش)','ok')}else{const t=(r.j.data&&(r.j.data.accessToken||r.j.data.token))||r.j.accessToken||r.j.token;if(t){try{localStorage.setItem('token',t)}catch(_){}}location.href=API.after}}else{msg((r.j.message||'ثبت‌نام انجام نشد')+(r.status===409?' — از تب «ورود» وارد شوید.':''));loadCap('3')}}catch(_){msg('اتصال برقرار نشد.')}$('#b3').disabled=false};
 const ins=[...document.querySelectorAll('#otp input')];ins.forEach((el,i)=>{el.inputMode='numeric';el.maxLength=1;el.autocomplete=i?'off':'one-time-code';el.oninput=()=>{el.value=toEn(el.value).replace(/\D/g,'');if(el.value&&ins[i+1])ins[i+1].focus()};el.onkeydown=e=>{if(e.key==='Backspace'&&!el.value&&ins[i-1])ins[i-1].focus()};
