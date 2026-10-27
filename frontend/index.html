@@ -154,10 +154,10 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
     <main id="app"></main>
   <footer class="ft">
     <div class="ft-top">
-      <div class="ft-brand"><a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc"><a href="#">تلگرام</a><a href="#">اینستاگرام</a><a href="#">بله</a><a href="#">ایتا</a><a href="#">روبیکا</a></div></div>
+      <div class="ft-brand"><a class="logo" href="#home"><i>د</i>دیجی‌بایل پی</a><p>پلتفرم خرید اقساطی. اعتبار، قرارداد و کارت مجازی در یک حساب.</p><div class="soc"><span>شبکه‌های اجتماعی پس از ثبت نشانی رسمی فعال می‌شوند.</span></div></div>
       <div><b>طرح‌ها</b><span id="ftPlans"></span></div>
-      <div><b>همکاری</b><a href="#">پذیرنده شوید</a><a href="#">نماینده شوید</a><a href="#">سازمان‌ها</a></div>
-      <div><b>پشتیبانی</b><a href="#">تیکت پشتیبانی</a><a href="#">قوانین و مقررات</a><a href="#">حریم خصوصی</a></div>
+      <div><b>همکاری</b><a href="/partners.html?type=merchant">پذیرنده شوید</a><a href="/partners.html?type=agent">نماینده شوید</a><a href="/partners.html?type=organization">سازمان‌ها</a></div>
+      <div><b>پشتیبانی</b><a href="/support.html">تیکت پشتیبانی</a><a href="/terms.html">قوانین و مقررات</a><a href="/privacy.html">حریم خصوصی</a></div>
       <div><b>تماس با ما</b><span class="ph">نشانی، تلفن و ایمیل از تنظیمات سایت خوانده می‌شود</span><span>ساعت کاری: شنبه تا چهارشنبه، ۹ تا ۱۸</span></div>
     </div>
     <div class="ft-badges"><div class="badge-box">محل نماد اعتماد الکترونیکی</div><div class="badge-box">محل نماد ساماندهی</div></div>
@@ -356,7 +356,7 @@ async function detectRole(){let token=null;try{for(const key of ['token','access
 (async()=>{if(!CFG.mock){try{const r=await fetch(CFG.endpoints.plans);if(r.ok){const j=await r.json();const L=j.data||j;if(Array.isArray(L)&&L.length)PLANS=L.map(normPlan).filter(Boolean)}}catch(e){}}
  await detectRole();plansMenu();renderAuth();route();try{$('#ftHost').textContent=location.hostname}catch(e){}})();
 function normPlan(x){/* map API loan product to page plan; adjust field names to your API */
- if(!x||x.isActive===false)return null;return{id:String(x.id||x.code),name:x.name||x.title,blurb:x.description||'',badge:'',min:(x.minAmount||1000000)/1e6,max:(x.maxAmount||20000000)/1e6,iv:x.intervalDays||30,tiers:(x.tiers||[{m:x.months||6,fee:x.feePercent||2.5,down:x.downPaymentPercent||0}]).map(t=>({m:t.months||t.m,fee:t.feePercent||t.fee,down:t.downPaymentPercent||t.down||0})),cond:x.conditions||{minAge:18,maxAge:70,minIncome:0,kyc:1,minScore:0,maxActive:3},docs:(x.documents||[]).map(d=>[d.name||d,d.required===false?0:1]),on:1,kind:(x.conditions&&x.conditions.kind)||x.kind||'',steps:x.steps||[],iv:x.intervalDays||30}}
+ if(!x||x.isActive===false)return null;return{id:String(x.id||x.code),name:x.name||x.title,blurb:x.description||'',badge:x.badge||'',min:(x.minAmount||1000000)/1e6,max:(x.maxAmount||20000000)/1e6,iv:x.intervalDays||30,tiers:(x.tiers||[{m:x.months||6,fee:x.feePercent||2.5,down:x.downPaymentPercent||0}]).map(t=>({m:t.months||t.m,fee:t.feePercent||t.fee,down:t.downPaymentPercent||t.down||0})),cond:x.conditions||{minAge:18,maxAge:70,minIncome:0,kyc:1,minScore:0,maxActive:3},docs:(x.documents||[]).map(d=>[d.name||d,d.required===false?0:1]),on:1,kind:(x.conditions&&x.conditions.kind)||x.kind||'',steps:x.steps||[],iv:x.intervalDays||30}}
 
 /* ---------- برند مستأجر (از دامنه‌ی فعلی) ---------- */
 (function(){const DEF='دیجی‌بایل پی';let cur=DEF;

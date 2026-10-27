@@ -3,12 +3,16 @@ name: Codespaces preview API smoke test
 on:
   pull_request:
     paths:
-      - "backend/dev-preview-server.py"
+      - "backend/**"
+      - "frontend/**"
+      - "tests/**"
       - ".github/workflows/dev-preview-tests.yml"
   push:
     branches: [main]
     paths:
-      - "backend/dev-preview-server.py"
+      - "backend/**"
+      - "frontend/**"
+      - "tests/**"
       - ".github/workflows/dev-preview-tests.yml"
 
 jobs:
@@ -22,7 +26,11 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check Python syntax
-        run: python -m py_compile backend/dev-preview-server.py
+        run: python -m py_compile backend/dev-preview-server.py tests/check_preview.py
+      - name: Set up Node for inline browser-script checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Start API and check database-backed endpoints
         shell: bash
         run: |
@@ -49,3 +57,4 @@ jobs:
           assert len(products.get("data", [])) >= 3, products
           print("PASS: health, tenant config, and SQLite-backed loan products")
           PY
+          python tests/check_preview.py

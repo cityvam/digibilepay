@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="fa" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>حساب کاربری | دیجی‌بایل پی"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap">
+<style>
+:root{color-scheme:light;--bg:#f7f4fb;--surface:#fff;--line:#e2d8ef;--fg:#201432;--muted:#70617f;--brand:#3b1f6b;--accent:#f5a400}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.8 Vazirmatn,Tahoma,sans-serif;padding:24px 16px}.wrap{max-width:860px;margin:auto}.head,.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:14px}.head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}.head h1{font-size:1.3rem;margin:0}.muted{color:var(--muted);font-size:.9rem}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.tile{border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}.tile small{display:block;color:var(--muted)}.tile b{overflow-wrap:anywhere}.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:9px 14px;text-decoration:none;color:var(--fg);background:#fff;font:inherit;cursor:pointer}.primary{background:var(--accent);border-color:var(--accent);font-weight:700}.status{padding:8px 12px;border-radius:10px;background:#fff7e2;color:#795400}.brand{font-weight:900;color:var(--brand)}#error{color:#a1263f}
+</style></head><body><main class="wrap">
+<header class="head"><div style="font-size:2rem;color:var(--brand)">◈</div><div style="flex:1"><h1>حساب کاربری</h1><div class="muted">اطلاعات حساب و دسترسی‌های شما</div></div><a class="btn" href="/">صفحهٔ اصلی</a></header>
+<div id="message" class="status">در حال دریافت اطلاعات حساب…</div>
+<section id="content" class="card" hidden></section>
+<section class="card"><h2>خدمات حساب</h2><div class="actions"><a class="btn primary" href="/documents.html">مدارک من</a><a class="btn" href="/contracts.html">قراردادهای من</a><a class="btn" href="/#plan-beta">طرح بتا بانک رفاه</a><a class="btn" href="/panel.html" id="admin" hidden>پنل مدیریت</a><button class="btn" id="logout">خروج از حساب</button></div><p class="muted">در پیش‌نمایش Codespaces، مدارک و قراردادها فقط در دیتابیس آزمایشی ذخیره می‌شوند. استعلام واقعی بانک و OCR فعال نیست.</p></section>
+</main><script>
+const keys=['token','accessToken','jwt'];let token=null;
+for(const k of keys){try{const v=localStorage.getItem(k);if(v){token=v;break}}catch(_){}}
+const msg=document.querySelector('#message');
+if(!token){location.replace('/login.html?next=%2Fprofile.html')}
+else fetch('/api/v1/auth/me',{headers:{Authorization:'Bearer '+token},credentials:'same-origin',cache:'no-store'}).then(async r=>{const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.message||'نشست معتبر نیست؛ دوباره وارد شوید.');return j.data||j}).then(u=>{
+document.querySelector('#content').hidden=false;
+const role=u.role||((u.roles||[])[0])||'Customer';
+const labels={SuperAdmin:'مدیر کل',Admin:'مدیر',Customer:'مشتری',Merchant:'پذیرنده',Agent:'نماینده'};
+document.querySelector('#content').innerHTML='<h2>اطلاعات حساب</h2><div class="grid"><div class="tile"><small>نام و نام خانوادگی</small><b>'+escapeHtml(u.fullName||u.name||'—')+'</b></div><div class="tile"><small>شماره موبایل</small><b dir="ltr">'+escapeHtml(u.phoneNumber||'—')+'</b></div><div class="tile"><small>ایمیل</small><b>'+escapeHtml(u.email||'ثبت نشده')+'</b></div><div class="tile"><small>نقش</small><b class="brand">'+escapeHtml(labels[role]||role)+'</b></div></div>';
+if(['SuperAdmin','Admin'].includes(role))document.querySelector('#admin').hidden=false;
+msg.textContent='حساب با موفقیت بارگذاری شد.';
+}).catch(e=>{msg.id='error';msg.textContent=e.message;setTimeout(()=>location.replace('/login.html?next=%2Fprofile.html'),900)});
+function escapeHtml(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+document.querySelector('#logout').onclick=()=>{for(const k of keys){try{localStorage.removeItem(k)}catch(_){}}location.replace('/login.html')};
+</script></body></html>
