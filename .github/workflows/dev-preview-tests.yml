@@ -1,0 +1,51 @@
+name: Codespaces preview API smoke test
+
+on:
+  pull_request:
+    paths:
+      - "backend/dev-preview-server.py"
+      - ".github/workflows/dev-preview-tests.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/dev-preview-server.py"
+      - ".github/workflows/dev-preview-tests.yml"
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Python syntax
+        run: python -m py_compile backend/dev-preview-server.py
+      - name: Start API and check database-backed endpoints
+        shell: bash
+        run: |
+          export DIGIBILEPAY_DATA_DIR="$RUNNER_TEMP/digibilepay-test-data"
+          python backend/dev-preview-server.py --host 127.0.0.1 --port 8088 >"$RUNNER_TEMP/digibilepay-preview.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl --silent --fail http://127.0.0.1:8088/api/v1/health >/dev/null; then break; fi
+            sleep 1
+          done
+          python - <<'PY'
+          import json, urllib.request
+          base = "http://127.0.0.1:8088"
+          def get(path):
+              with urllib.request.urlopen(base + path, timeout=5) as response:
+                  return json.loads(response.read().decode("utf-8"))
+          health = get("/api/v1/health")
+          assert health["ok"] is True and health["database"] == "sqlite", health
+          assert health["loanProducts"] >= 3, health
+          tenant = get("/api/v1/tenant/config")
+          assert (tenant.get("data") or {}).get("name"), tenant
+          products = get("/api/v1/loan-products")
+          assert len(products.get("data", [])) >= 3, products
+          print("PASS: health, tenant config, and SQLite-backed loan products")
+          PY
