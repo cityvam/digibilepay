@@ -734,6 +734,9 @@ def api_get(handler,path,query):
     match=re.fullmatch(r"/api/v1/admin/loan-products/([^/]+)",path,re.I)
     if match:
         require_admin(handler); ident=match.group(1)
+        if ident.lower()=="labels":
+            with connect_db() as c: labels=c.execute("SELECT id,name,slug FROM loan_products ORDER BY sort_order,name").fetchall()
+            return 200,{"data":[{"id":r["id"],"value":r["id"],"name":r["name"],"label":r["name"],"slug":r["slug"]} for r in labels]}
         with connect_db() as c: row=c.execute("SELECT * FROM loan_products WHERE id=? OR slug=?",(ident,ident)).fetchone()
         if not row: raise ApiError(404,"طرح وام پیدا نشد.")
         return 200,{"data":product_json(row)}
