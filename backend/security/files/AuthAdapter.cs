@@ -219,22 +219,55 @@ public static class AuthTools
         Console.WriteLine("قالب هش رمز: " + PasswordHelper.Kind(sample));
         Console.WriteLine("کلید JWT: " + (new[] { "Jwt:Key", "Jwt:Secret", "JwtSettings:Key", "JwtSettings:Secret", "Authentication:Jwt:Key", "Jwt:SecretKey" }.Any(k => !string.IsNullOrWhiteSpace(cfg[k])) ? "تنظیم شده" : "پیدا نشد"));
         Console.WriteLine("کاوه‌نگار: " + (string.IsNullOrWhiteSpace(cfg["KAVENEGAR_API_KEY"]) || cfg["KAVENEGAR_API_KEY"] == "YOUR_API_KEY" ? "کلید تنظیم نشده" : "کلید تنظیم شده") + " | فرستنده: " + (cfg["KAVENEGAR_SENDER"] ?? "—"));
-        if (!args.Contains("--create-superadmin")) return;
+        var createSuperAdmin = args.Contains("--create-superadmin");
+        var createRoleUser = args.Contains("--create-role-user");
+        if (!createSuperAdmin && !createRoleUser) return;
 
-        Console.WriteLine("\n=== ساخت سوپرادمین (اطلاعات را همین‌جا وارد کنید؛ هیچ‌چیز در کد یا لاگ ذخیره نمی‌شود) ===");
+        string role;
+        if (createSuperAdmin)
+        {
+            role = "SuperAdmin";
+            Console.WriteLine("\n=== ساخت سوپرادمین (اطلاعات را در همین کنسول وارد کنید؛ هیچ‌چیز در کد یا لاگ ذخیره نمی‌شود) ===");
+        }
+        else
+        {
+            Console.WriteLine("\n=== ساخت کاربر با نقش (فقط از کنسول سرور) ===");
+            Console.Write("نقش (Admin/Customer/Merchant/Agent): ");
+            var requestedRole = Console.ReadLine()?.Trim() ?? "";
+            var allowedRoles = new[] { "Admin", "Customer", "Merchant", "Agent" };
+            role = allowedRoles.FirstOrDefault(x => string.Equals(x, requestedRole, StringComparison.OrdinalIgnoreCase)) ?? "";
+            if (string.IsNullOrEmpty(role))
+            {
+                Console.WriteLine("نقش نامعتبر است. یکی از این نقش‌ها را وارد کنید: Admin, Customer, Merchant, Agent");
+                Environment.ExitCode = 2; return;
+            }
+        }
+
         if (m.Role == null || m.Id == null) { Console.WriteLine("ساخت متوقف شد: ستون نقش یا Id پیدا نشد."); Environment.ExitCode = 2; return; }
-        Console.Write("نام و نام خانوادگی [بهروز حسین‌زاده]: "); var name = Console.ReadLine(); if (string.IsNullOrWhiteSpace(name)) name = "بهروز حسین‌زاده";
-        Console.Write("شماره موبایل (09...): "); var phone = OtpService.NormPhone(Console.ReadLine()); if (phone == "") { Console.WriteLine("شماره معتبر نیست."); Environment.ExitCode = 2; return; }
-        Console.Write("ایمیل: "); var email = Console.ReadLine()?.Trim();
-        string? nid = null; if (m.Nid != null) { Console.Write("کد ملی (اختیاری؛ فقط برای ثبت در پرونده): "); nid = Console.ReadLine()?.Trim(); if (string.IsNullOrEmpty(nid)) nid = null; }
-        var p1 = ReadHidden("رمز اولیه (حداقل ۱۲ نویسه): "); var p2 = ReadHidden("تکرار رمز: ");
+        Console.Write("نام و نام خانوادگی: ");
+        var name = Console.ReadLine()?.Trim();
+        if (string.IsNullOrWhiteSpace(name)) { Console.WriteLine("نام و نام خانوادگی الزامی است؛ حسابی ساخته نشد."); Environment.ExitCode = 2; return; }
+
+        Console.Write("شماره موبایل (09...): ");
+        var phone = OtpService.NormPhone(Console.ReadLine());
+        if (phone == "") { Console.WriteLine("شماره معتبر نیست."); Environment.ExitCode = 2; return; }
+        Console.Write("ایمیل: ");
+        var email = Console.ReadLine()?.Trim();
+        string? nid = null;
+        if (m.Nid != null) { Console.Write("کد ملی (اختیاری؛ فقط برای ثبت در پرونده): "); nid = Console.ReadLine()?.Trim(); if (string.IsNullOrEmpty(nid)) nid = null; }
+
+        var p1 = ReadHidden("رمز اولیه (حداقل ۱۲ نویسه): ");
+        var p2 = ReadHidden("تکرار رمز: ");
         if (p1 != p2 || p1.Length < 12) { Console.WriteLine("رمزها یکسان نیستند یا کمتر از ۱۲ نویسه‌اند."); Environment.ExitCode = 2; return; }
-        var (u, err) = await a.CreateUserAsync(name!, phone, email, nid, p1, "SuperAdmin", null, true, default);
+
+        var (u, err) = await a.CreateUserAsync(name, phone, email, nid, p1, role, null, true, default);
         if (u == null) { Console.WriteLine("ساخته نشد: " + err); Environment.ExitCode = 2; return; }
-        var back = await a.FindByPhoneAsync(phone, default); var ok = back != null && a.VerifyPassword(back, p1) && a.RoleOf(back) == "SuperAdmin";
-        Console.WriteLine(ok ? "حساب در پایگاه داده ساخته شد و بررسی رمز و نقش موفق بود. ورود واقعی را در مرورگر آزمایش کنید؛ تا آن موقع فعال اعلام نکنید."
-                              : "حساب ساخته شد ولی بررسی رمز/نقش ناموفق بود. حساب را فعال ندانید و گزارش دهید.");
-        Console.WriteLine("رویداد: ساخت SuperAdmin برای شماره ••" + phone[^4..] + " در " + DateTime.UtcNow.ToString("u"));
+        var back = await a.FindByPhoneAsync(phone, default);
+        var ok = back != null && a.VerifyPassword(back, p1) && string.Equals(a.RoleOf(back), role, StringComparison.OrdinalIgnoreCase);
+        Console.WriteLine(ok
+            ? $"حساب با نقش {role} در پایگاه داده ساخته شد و بررسی رمز و نقش موفق بود. ورود واقعی را در مرورگر آزمایش کنید؛ تا آن موقع فعال اعلام نکنید."
+            : "حساب ساخته شد ولی بررسی رمز/نقش ناموفق بود. حساب را فعال ندانید و گزارش دهید.");
+        Console.WriteLine("رویداد: ساخت " + role + " برای شماره ••" + phone[^4..] + " در " + DateTime.UtcNow.ToString("u"));
         if (!ok) Environment.ExitCode = 3;
     }
 }
