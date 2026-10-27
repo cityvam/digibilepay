@@ -106,6 +106,10 @@ details{border-bottom:1px solid var(--line);padding:14px 2px}summary{cursor:poin
 .tabs{display:grid;grid-template-columns:1fr 1fr;background:var(--surface2);border-radius:12px;padding:4px;margin:14px 0}.tabs button{font:inherit;font-weight:700;border:0;border-radius:9px;padding:8px;background:none;color:var(--muted);cursor:pointer}.tabs button[aria-selected=true]{background:var(--surface);color:var(--fg);box-shadow:0 1px 6px rgba(0,0,0,.15)}
 .fld{margin-top:10px}.fld label{display:block;font-size:.84rem;color:var(--muted);margin-bottom:4px}.fld input{width:100%;font:inherit;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:11px 14px;min-height:46px}
 .fld .h{font-size:.78rem;margin-top:3px;min-height:1.2em}.h.ok{color:var(--ok)}.h.bad{color:var(--bad)}
+.password-wrap{position:relative}.password-wrap input{padding-left:48px!important}.password-eye{position:absolute;left:5px;top:4px;width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.pw-strength{display:flex;align-items:center;gap:10px;margin-top:7px;font-size:.78rem;color:var(--muted)}.pw-bars{display:flex;gap:4px;flex:1;max-width:150px}.pw-bars i{height:5px;flex:1;border-radius:99px;background:var(--line)}
+.pw-strength.weak .pw-bars i:first-child{background:var(--bad)}.pw-strength.medium .pw-bars i:nth-child(-n+2){background:#e0a020}.pw-strength.strong .pw-bars i{background:var(--ok)}
+.pw-strength.weak .pw-label{color:var(--bad)}.pw-strength.medium .pw-label{color:#e0a020}.pw-strength.strong .pw-label{color:var(--ok)}
 .otp{display:flex;gap:8px;direction:ltr;justify-content:center;margin:14px 0}.otp input{width:48px;height:56px;text-align:center;font-family:var(--f-num);font-size:1.4rem;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg)}
 .chk{display:flex;gap:8px;align-items:flex-start;font-size:.84rem;color:var(--muted);margin-top:12px}.chk input{margin-top:5px;accent-color:var(--accent)}
 .close{float:left;font:inherit;background:none;border:0;color:var(--muted);font-size:1.4rem;cursor:pointer;line-height:1}
@@ -290,26 +294,29 @@ function modal(html){const m=$('#modal');m.hidden=false;m.innerHTML=`<div class=
 function closeM(){$('#modal').hidden=true;$('#modal').innerHTML=''}
 addEventListener('keydown',e=>{if(e.key==='Escape')closeM()});
 const REF=(()=>{try{return new URLSearchParams(location.search).get('ref')||''}catch(e){return ''}})();
-function hint(el,msg,ok){const h=el.parentElement.querySelector('.h');h.textContent=msg;h.className='h '+(msg?(ok?'ok':'bad'):'')}
+function hint(el,msg,ok){const fld=el.closest('.fld');const h=fld?fld.querySelector('.h'):el.parentElement.querySelector('.h');if(!h)return;h.textContent=msg;h.className='h '+(msg?(ok?'ok':'bad'):'')}
+function passwordStrength(value){const v=toEn(value);if(!v)return{level:'',label:''};const c=[/[a-z]/.test(v),/[A-Z]/.test(v),/[0-9]/.test(v),/[^A-Za-z0-9]/.test(v)].filter(Boolean).length;if(v.length<8||c<2)return{level:'weak',label:'ضعیف'};if((v.length>=12&&c>=3)||(v.length>=10&&c===4))return{level:'strong',label:'قوی'};return{level:'medium',label:'متوسط'}}
 function openAuth(mode,msg){if(!CFG.mock){location.href=mode==='login'?'/login.html':'/register.html';return}modal(`<button class="close" aria-label="بستن" onclick="closeM()">×</button><h2>${mode==='login'?'ورود به حساب':'عضویت در دیجی‌بایل پی'}</h2><p class="sub" style="margin:0">${msg||(mode==='login'?'شماره موبایل و رمز عبور را وارد کنید.':'در چند ثانیه عضو شوید و اعتبار بگیرید.')}</p>
  <div class="tabs" role="tablist"><button role="tab" aria-selected="${mode==='login'}" id="tL">ورود</button><button role="tab" aria-selected="${mode==='reg'}" id="tR">عضویت</button></div><form id="af" novalidate>
  ${mode==='reg'?`<div class="fld"><label for="fn">نام و نام خانوادگی</label><input id="fn" autocomplete="name"><div class="h"></div></div>`:''}
  <div class="fld"><label for="fm">شماره موبایل</label><input id="fm" inputmode="numeric" maxlength="11" placeholder="۰۹۱۲۳۴۵۶۷۸۹" autocomplete="tel"><div class="h"></div></div>
- ${mode==='reg'?`<div class="fld"><label for="fi">کد ملی</label><input id="fi" inputmode="numeric" maxlength="10"><div class="h"></div></div>`:''}
- <div class="fld"><label for="fp">رمز ثابت (حداقل ۸ رقم عددی)</label><input id="fp" type="password" inputmode="numeric" minlength="8" autocomplete="${mode==='login'?'current-password':'new-password'}"><div class="h"></div></div>
+ ${mode==='reg'?`<div class="fld"><label for="fi">کد ملی</label><input id="fi" inputmode="numeric" maxlength="10" required><div class="h"></div></div>
+ <div class="fld"><label for="fe">ایمیل</label><input id="fe" type="email" autocomplete="email" required><div class="h"></div></div>`:''}
+ <div class="fld"><label for="fp">رمز ثابت (حداقل ۸ نویسه)</label><div class="password-wrap"><input id="fp" type="password" minlength="8" autocomplete="${mode==='login'?'current-password':'new-password'}"><button type="button" class="password-eye" id="showFp" aria-label="نمایش رمز" aria-pressed="false"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div><div class="h"></div>${mode==='reg'?'<div class="pw-strength" id="fpStrength" hidden aria-live="polite"><div class="pw-bars"><i></i><i></i><i></i></div><span class="pw-label"></span></div>':''}</div>
  ${mode==='reg'?`<div class="fld"><label for="fr">کد معرف (اختیاری)</label><input id="fr" value="${esc(REF)}" style="direction:ltr;text-align:left"><div class="h"></div></div><label class="chk"><input type="checkbox" id="fc"> قوانین و حریم خصوصی را می‌پذیرم و با استعلام اعتبار موافقم.</label>`:''}
  <button class="btn solid lg" style="width:100%;margin-top:16px" type="submit">${mode==='login'?'ورود':'ادامه و دریافت کد تأیید'}</button></form>`);
  $('#tL').onclick=()=>openAuth('login');$('#tR').onclick=()=>openAuth('reg');
  const f=$('#af');
  f.fm.oninput=()=>{const v=f.fm.value;hint(f.fm,v&&!okMobile(v)?'شماره باید ۱۱ رقم و با ۰۹ شروع شود':'',0)};
  if(f.fi)f.fi.oninput=()=>{const v=f.fi.value;hint(f.fi,v.length===10?(okNid(v)?'کد ملی معتبر است':'کد ملی معتبر نیست'):'',okNid(v))};
- if(f.fp)f.fp.oninput=()=>{const v=toEn(f.fp.value),valid=/^[0-9]{8,}$/.test(v);hint(f.fp,v?(valid?'رمز مناسب است':'رمز باید حداقل ۸ رقم عددی باشد'):'',valid)};
+ if(f.fp){const eye=$('#showFp');eye.onclick=()=>{const show=f.fp.type==='password';f.fp.type=show?'text':'password';eye.setAttribute('aria-pressed',show);eye.setAttribute('aria-label',show?'پنهان کردن رمز':'نمایش رمز');eye.querySelector('svg').innerHTML=show?'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 19c-7 0-11-7-11-7a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 5c7 0 11 7 11 7a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/>':'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/>'};
+ f.fp.oninput=()=>{const v=toEn(f.fp.value),valid=v.length>=8;hint(f.fp,v?(valid?'رمز مناسب است':'رمز باید حداقل ۸ نویسه باشد'):'',valid);const box=$('#fpStrength');if(box){const st=passwordStrength(v);box.hidden=!st.level;box.className='pw-strength '+st.level;box.querySelector('.pw-label').textContent=st.label}}}
  f.onsubmit=async e=>{e.preventDefault();let bad=false;const need=(el,c,m)=>{if(!c){hint(el,m,0);bad=true}};
-  need(f.fm,okMobile(f.fm.value),'شماره موبایل معتبر نیست');need(f.fp,/^[0-9]{8,}$/.test(toEn(f.fp.value)),'رمز ثابت باید حداقل ۸ رقم عددی باشد');
-  if(mode==='reg'){need(f.fn,f.fn.value.trim().split(' ').length>=2,'نام و نام خانوادگی را کامل بنویسید');need(f.fi,okNid(f.fi.value),'کد ملی معتبر نیست');if(!f.fc.checked){toast('برای ادامه، قوانین را بپذیرید');bad=true}}
+  need(f.fm,okMobile(f.fm.value),'شماره موبایل معتبر نیست');need(f.fp,toEn(f.fp.value).length>=8,'رمز ثابت باید حداقل ۸ نویسه باشد');
+  if(mode==='reg'){need(f.fn,f.fn.value.trim().split(' ').length>=2,'نام و نام خانوادگی را کامل بنویسید');need(f.fi,okNid(f.fi.value),'کد ملی معتبر نیست');need(f.fe,/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.fe.value.trim()),'ایمیل معتبر وارد کنید');if(!f.fc.checked){toast('برای ادامه، قوانین را بپذیرید');bad=true}}
   if(bad)return;
-  const body={phoneNumber:toEn(f.fm.value),password:f.fp.value};
-  if(mode==='reg'){body.fullName=f.fn.value.trim();body.nationalCode=toEn(f.fi.value);body.referralCode=f.fr.value.trim()||null}
+  const body={phoneNumber:toEn(f.fm.value),password:toEn(f.fp.value)};
+  if(mode==='reg'){body.fullName=f.fn.value.trim();body.nationalCode=toEn(f.fi.value);body.email=f.fe.value.trim();body.referralCode=f.fr.value.trim()||null}
   try{
    if(CFG.mock){await new Promise(r=>setTimeout(r,500));mode==='reg'?otpStep(body):done(body.fullName||'مشتری')}
    else{const r=await fetch(mode==='login'?CFG.endpoints.login:CFG.endpoints.register,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));
