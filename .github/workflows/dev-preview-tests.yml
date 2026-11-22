@@ -6,6 +6,8 @@ on:
       - "backend/**"
       - "frontend/**"
       - "tests/**"
+      - "*.sh"
+      - "setup-web.py"
       - ".github/workflows/dev-preview-tests.yml"
   push:
     branches: [main]
@@ -26,7 +28,9 @@ jobs:
         with:
           python-version: "3.12"
       - name: Check Python syntax
-        run: python -m py_compile backend/dev-preview-server.py tests/check_preview.py
+        run: |
+          bash -n digitalpay-setup.sh install-all.sh server-run.sh
+          python -m py_compile setup-web.py backend/dev-preview-server.py tests/check_preview.py
       - name: Set up Node for inline browser-script checks
         uses: actions/setup-node@v4
         with:
