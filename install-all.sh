@@ -2,7 +2,9 @@
 # نصب پشت‌سرهم همه‌ی ماژول‌های بک‌اند. هر مرحله بکاپ می‌گیرد و با خطا متوقف می‌شود.
 # استفاده: bash install-all.sh [مسیر_پروژه]
 set -e
-ROOT="${1:-/home/ghestine/domains/ghestine.ir/Ghestine}"; H="$(cd "$(dirname "$0")" && pwd)"
+ROOT="${1:-${DIGIBILEPAY_ROOT:-}}"; H="$(cd "$(dirname "$0")" && pwd)"
+[ -n "$ROOT" ] || { echo "مسیر پروژه را به‌صورت آرگومان یا DIGIBILEPAY_ROOT مشخص کنید."; exit 2; }
+[ -f "$ROOT/src/Ghestine.API/Ghestine.API.csproj" ] || { echo "پروژهٔ پایه در مسیر $ROOT پیدا نشد؛ نصب متوقف شد."; exit 2; }
 echo "### 1/10 چندمستاجری"; bash "$H/backend/tenancy/install.sh" "$ROOT"
 echo "### 2/10 هسته (طرح‌ها، کارت مجازی، درگاه، مدارک)"; bash "$H/backend/core/install.sh" "$ROOT"
 echo "### 3/10 امنیت ورود (کپچا، OTP)"; bash "$H/backend/security/install.sh" "$ROOT"
