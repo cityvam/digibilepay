@@ -1,7 +1,16 @@
 #!/bin/bash
 # نصب قراردادها (داخل تعریف وام): قالب نسخه‌دار، متغیرها، موتور امن، تولید، وضعیت و تأیید
 set -e
-ROOT="${1:-/home/ghestine/domains/ghestine.ir/Ghestine}"
+ROOT="${1:-${DIGIBILEPAY_ROOT:-}}"
+if [ -z "$ROOT" ]; then
+  echo "مسیر پروژه الزامی است؛ مسیر را به‌صورت آرگومان بدهید یا DIGIBILEPAY_ROOT را تنظیم کنید."
+  exit 1
+fi
+if [ ! -f "$ROOT/src/Ghestine.API/Ghestine.API.csproj" ]; then
+  echo "پروژه‌ی پایه پیدا نشد: $ROOT/src/Ghestine.API/Ghestine.API.csproj"
+  echo "هیچ فایلی تغییر نکرد."
+  exit 1
+fi
 HERE="$(cd "$(dirname "$0")" && pwd)"; SRC="$ROOT/src"
 [ -d "$SRC" ] || { echo "پوشه src پیدا نشد: $SRC"; exit 1; }
 B="$ROOT/.ctr-backup-$(date +%Y%m%d%H%M%S)"; mkdir -p "$B"
