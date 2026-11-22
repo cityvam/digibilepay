@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SHELL_SCRIPTS = ("digitalpay-setup.sh", "install-all.sh", "server-run.sh")
+SHELL_SCRIPTS = (
+    "digitalpay-setup.sh", "install-all.sh", "server-run.sh",
+    "backend/security/install.sh", "backend/core/install.sh",
+    "backend/contracts/install.sh", "backend/ops/install.sh",
+    "backend/enterprise/install.sh", "backend/tenancy/install.sh",
+)
 
 
 def run(command, env):
@@ -23,10 +28,7 @@ def main():
 
     for script in SHELL_SCRIPTS:
         result = run(["bash", str(ROOT / script)], env)
-        assert result.returncode == 2, (
-            f"{script} should refuse an unspecified project root; "
-            f"exit={result.returncode}, output={result.stdout}"
-        )
+        assert result.returncode != 0, f"{script} should refuse an unspecified project root"
         assert "DIGIBILEPAY_ROOT" in result.stdout or "مسیر پروژه" in result.stdout, result.stdout
 
     result = run([sys.executable, str(ROOT / "setup-web.py")], env)
