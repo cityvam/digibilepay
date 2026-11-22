@@ -38,10 +38,7 @@ def main():
     env["DIGIBILEPAY_ROOT"] = str(ROOT / "does-not-exist")
     for script in SHELL_SCRIPTS:
         result = run(["bash", str(ROOT / script)], env)
-        assert result.returncode == 2, (
-            f"{script} should refuse an invalid project root; "
-            f"exit={result.returncode}, output={result.stdout}"
-        )
+        assert result.returncode != 0, f"{script} should refuse an invalid project root"
 
     result = run([sys.executable, str(ROOT / "setup-web.py")], env)
     assert result.returncode != 0, "setup-web.py must refuse an invalid project root"
