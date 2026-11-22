@@ -1,7 +1,9 @@
 #!/bin/bash
 # اجرای مرحله‌به‌مرحله‌ی نصب و بررسی روی سرور. همه‌ی خروجی‌ها در یک گزارش جمع می‌شود (بدون رمز و کلید).
 # استفاده:  bash server-run.sh [مسیر_پروژه]
-ROOT="${1:-/home/ghestine/domains/ghestine.ir/Ghestine}"; H="$(cd "$(dirname "$0")" && pwd)"; R="$H/report-$(date +%Y%m%d-%H%M%S).txt"
+ROOT="${1:-${DIGIBILEPAY_ROOT:-}}"; H="$(cd "$(dirname "$0")" && pwd)"; R="$H/report-$(date +%Y%m%d-%H%M%S).txt"
+[ -n "$ROOT" ] || { echo "مسیر پروژه را به‌صورت آرگومان یا DIGIBILEPAY_ROOT مشخص کنید."; exit 2; }
+[ -f "$ROOT/src/Ghestine.API/Ghestine.API.csproj" ] || { echo "پروژهٔ پایه در مسیر $ROOT پیدا نشد؛ نصب متوقف شد."; exit 2; }
 ask(){ read -r -p "$1 [y/N] " a; [ "$a" = y ] || [ "$a" = Y ]; }
 log(){ echo -e "\n##### $1" | tee -a "$R"; }
 run(){ "$@" 2>&1 | sed -E 's/(KEY|PEPPER|SECRET|PASSWORD|Password)=[^ ]+/\1=***/g' | tee -a "$R"; return "${PIPESTATUS[0]}"; }
@@ -27,7 +29,7 @@ if ask "مایگریشن ساخته و اعمال شود؟"; then
 fi
 
 log "۴) استقرار"
-if ask "deploy.sh اجرا شود (سرویس چند ثانیه قطع می‌شود)؟"; then run bash /home/ghestine/deploy.sh; sleep 3; fi
+if ask "deploy.sh اجرا شود (سرویس چند ثانیه قطع می‌شود)؟"; then DEPLOY_SCRIPT="${DIGIBILEPAY_DEPLOY_SCRIPT:-$ROOT/deploy.sh}"; [ -f "$DEPLOY_SCRIPT" ] || { echo "deploy.sh پیدا نشد: $DEPLOY_SCRIPT"; exit 1; }; run bash "$DEPLOY_SCRIPT"; sleep 3; fi
 
 log "۵) تشخیص ورود (بدون رمز)"
 run bash "$H/backend/security/run-tool.sh" --auth-doctor
