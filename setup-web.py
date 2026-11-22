@@ -6,7 +6,10 @@
 استفاده:  python3 setup-web.py [مسیر_پروژه] [پورت]"""
 import http.server, subprocess, secrets, sys, os, time, threading, json, urllib.parse, socket, re
 H = os.path.dirname(os.path.abspath(__file__))
-ROOT = sys.argv[1] if len(sys.argv) > 1 else "/home/ghestine/domains/ghestine.ir/Ghestine"
+ROOT = sys.argv[1] if len(sys.argv) > 1 else os.environ.get("DIGIBILEPAY_ROOT", "")
+if not ROOT or not os.path.isfile(os.path.join(ROOT, "src", "Ghestine.API", "Ghestine.API.csproj")):
+    raise SystemExit("مسیر پروژهٔ پایه معتبر نیست؛ مسیر باید شامل src/Ghestine.API/Ghestine.API.csproj باشد.")
+ROOT = os.path.abspath(ROOT)
 PORT = int(sys.argv[2]) if len(sys.argv) > 2 else 8765
 TOKEN = secrets.token_urlsafe(24); START = time.time(); TTL = 3600; BOUND = {"ip": None}; LOCK = threading.Lock()
 MASK = re.compile(r'(KEY|PEPPER|SECRET|PASSWORD|Password|Pwd|pwd)=\S+')
