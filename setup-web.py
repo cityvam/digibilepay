@@ -21,7 +21,7 @@ STEPS = {
  "install": ("۳) نصب ماژول‌ها", f'bash {HH}/install-all.sh {R}', True),
  "migrate": ("۴) مایگریشن دیتابیس", f'cd {R} && dotnet ef migrations add DigitalPayModules -p src/Ghestine.Infrastructure -s src/Ghestine.API && dotnet ef database update -p src/Ghestine.Infrastructure -s src/Ghestine.API', True),
  "deploy": ("۵) استقرار (چند ثانیه قطع)", 'bash /home/ghestine/deploy.sh', True),
- "web": ("۶) نصب فرانت Next.js (نیازمند root)", f'[ "$(id -u)" = 0 ] && bash {HH}/web-next/install-web.sh || echo "این مرحله باید با کاربر root اجرا شود: sudo bash {HH}/web-next/install-web.sh"', True),
+ "web": ("۶) نصب فرانت Next.js (غیرفعال؛ فایل نصب در مخزن موجود نیست)", 'echo "web-next/install-web.sh در این مخزن موجود نیست؛ نصب فرانت Next.js هنوز قابل اجرا نیست."', False),
  "doctor": ("۷) تشخیص ورود", f'bash {HH}/backend/security/run-tool.sh --auth-doctor', False),
 }
 PAGE = """<!doctype html><html lang="fa" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>نصب DigitalPay</title>
