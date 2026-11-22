@@ -31,7 +31,7 @@ jobs:
           python-version: "3.12"
       - name: Check Python syntax
         run: |
-          bash -n digitalpay-setup.sh install-all.sh server-run.sh
+          bash -n digitalpay-setup.sh install-all.sh server-run.sh backend/security/install.sh backend/core/install.sh backend/contracts/install.sh backend/ops/install.sh backend/enterprise/install.sh backend/tenancy/install.sh
           python -m py_compile setup-web.py backend/dev-preview-server.py tests/check_preview.py tests/check_installer_guards.py
           python tests/check_installer_guards.py
       - name: Set up Node for inline browser-script checks
