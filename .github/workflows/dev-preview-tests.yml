@@ -32,7 +32,8 @@ jobs:
       - name: Check Python syntax
         run: |
           bash -n digitalpay-setup.sh install-all.sh server-run.sh
-          python -m py_compile setup-web.py backend/dev-preview-server.py tests/check_preview.py
+          python -m py_compile setup-web.py backend/dev-preview-server.py tests/check_preview.py tests/check_installer_guards.py
+          python tests/check_installer_guards.py
       - name: Set up Node for inline browser-script checks
         uses: actions/setup-node@v4
         with:
